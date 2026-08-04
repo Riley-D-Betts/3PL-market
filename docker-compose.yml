@@ -28,6 +28,7 @@ services:
       DATABASE_URL: postgres://threepl:${POSTGRES_PASSWORD:-threepl}@postgres:5432/threepl
       NUXT_SESSION_PASSWORD: ${NUXT_SESSION_PASSWORD:-insecure-dev-session-password-min-32-chars!}
       NUXT_SEED_DEMO_DATA: ${NUXT_SEED_DEMO_DATA:-true}
+      NUXT_PUBLIC_DEMO_MODE: ${NUXT_PUBLIC_DEMO_MODE:-true}
     depends_on:
       postgres:
         condition: service_healthy

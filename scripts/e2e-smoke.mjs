@@ -180,7 +180,23 @@ if (withDriver) {
   check('dispatch view exposes the assigned driver home base', typeof dispatch.assignedDriver?.homeBaseLat === 'number')
 }
 
-console.log('\n9. block / unblock round-trip')
+console.log('\n9. demo mode (skipped when the flag is off)')
+{
+  const probe = client()
+  const { status: listStatus, data: accounts } = await probe('/api/auth/demo-accounts')
+  if (listStatus === 404) {
+    console.log('  --   demo mode off — endpoints correctly 404')
+  }
+  else {
+    check('demo-accounts lists the seeded shipper', accounts.accounts.some(a => a.email === 'shipper@demo.test'))
+    const target = accounts.accounts.find(a => a.email === 'shipper@demo.test')
+    await probe('/api/auth/demo-login', { method: 'POST', body: { userId: target.id }, expect: 200 })
+    const { data: me } = await probe('/api/auth/me', { expect: 200 })
+    check('demo-login yields a working session', me.user.email === 'shipper@demo.test')
+  }
+}
+
+console.log('\n10. block / unblock round-trip')
 const { data: companies } = await shipper('/api/shipper/blocks', { expect: 200 })
 const alreadyBlocked = companies.blocks.length
 await shipper('/api/shipper/blocks', { method: 'POST', expect: 201, body: { companyId: wonDetail.load.assignedCompanyId, reason: 'E2E test block' } })

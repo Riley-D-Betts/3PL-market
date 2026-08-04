@@ -7,6 +7,11 @@ export default defineNuxtConfig({
     // Overridable at runtime via NUXT_* env vars (Docker) — see .env.example
     migrationsDir: 'server/database/migrations',
     seedDemoData: false,
+    public: {
+      // Demo mode: the login page becomes a one-click account picker and
+      // password-less demo-login endpoints open up. NEVER enable in production.
+      demoMode: false,
+    },
     session: {
       cookie: {
         // Declared so NUXT_SESSION_COOKIE_SECURE can bind: nuxt-auth-utils only

@@ -107,6 +107,10 @@ export const blockInputSchema = z.object({
   reason: z.string().trim().max(500).optional(),
 })
 
+export const demoLoginSchema = z.object({
+  userId: z.uuid(),
+})
+
 export const awardSchema = z.object({
   bidId: z.uuid(),
 })

@@ -16,7 +16,7 @@ Then open <http://localhost:3000>. On first boot the app runs its database migra
 
 ### Demo accounts
 
-All demo passwords are `Password123!`.
+With the compose defaults, **demo mode** is on: the login page lists every account — just click one to explore that role. The passwords below only matter when demo mode is off; they are all `Password123!`.
 
 | Role | Email | What to try |
 |---|---|---|
@@ -37,6 +37,7 @@ Copy `.env.example` to `.env` (compose has safe dev defaults built in):
 | `DATABASE_URL` | Postgres connection string |
 | `NUXT_SESSION_PASSWORD` | Secret sealing session cookies — **set your own 32+ char value in production** |
 | `NUXT_SEED_DEMO_DATA` | `true` to seed demo data on boot (idempotent — skipped when data exists) |
+| `NUXT_PUBLIC_DEMO_MODE` | `true` turns the login page into a one-click account picker (no passwords). Compose defaults it on for instant demos — **never enable on a real deployment** |
 | `POSTGRES_PASSWORD` | Compose-only: password for the bundled Postgres |
 | `NUXT_MIGRATIONS_DIR` | Migrations folder override (preset in the Docker image) |
 
