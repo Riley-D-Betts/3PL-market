@@ -39,6 +39,7 @@ export function useAuthz() {
           { label: 'Bids', to: '/carrier/bids', icon: 'i-lucide-gavel' },
           { label: 'Fleet', to: '/carrier/fleet', icon: 'i-lucide-bus-front' },
           { label: 'Drivers', to: '/carrier/drivers', icon: 'i-lucide-users' },
+          { label: 'Reports', to: '/carrier/reports', icon: 'i-lucide-bar-chart-3' },
         ]
       case 'driver':
         return [

@@ -180,6 +180,15 @@ if (withDriver) {
   check('dispatch view exposes the assigned driver home base', typeof dispatch.assignedDriver?.homeBaseLat === 'number')
 }
 
+console.log('\n8b. fleet reports')
+{
+  const { data: report } = await granite('/api/carrier/reports', { expect: 200 })
+  check('report has totals and driver rows', typeof report.totals.totalLoads === 'number' && report.byDriver.length >= 1)
+  const dale2 = report.byDriver.find(r => r.driverName === 'Dale Rocker')
+  check('seeded delivered load contributes revenue incl. detention', (dale2?.revenueCents ?? 0) >= 36000 + 8750)
+  check('vehicle rows aggregate', report.byVehicle.length >= 1)
+}
+
 console.log('\n9. demo mode (skipped when the flag is off)')
 {
   const probe = client()

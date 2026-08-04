@@ -111,6 +111,11 @@ export const demoLoginSchema = z.object({
   userId: z.uuid(),
 })
 
+export const reportsQuerySchema = z.object({
+  from: dateInput.optional(),
+  to: dateInput.optional(),
+})
+
 export const awardSchema = z.object({
   bidId: z.uuid(),
 })
