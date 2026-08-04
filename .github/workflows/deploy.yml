@@ -26,7 +26,10 @@ jobs:
           set -euo pipefail
           cd /opt/3pl-market
           git fetch --prune origin
-          git reset --hard "origin/${GITHUB_REF_NAME}"
+          # checkout -B, not reset --hard: the tree may be sitting on some other
+          # branch, and a bare reset would drag that branch's pointer to main's
+          # commit instead of actually moving onto main.
+          git checkout -B "$GITHUB_REF_NAME" "origin/$GITHUB_REF_NAME"
           git log --oneline -1
 
       - name: Build and restart
