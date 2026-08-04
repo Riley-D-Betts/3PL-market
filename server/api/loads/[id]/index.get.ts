@@ -125,6 +125,18 @@ export default defineEventHandler(async (event) => {
   // On-site contacts belong to the working relationship — never to board
   // browsers. Same for the invoicing address.
   const canSeeContacts = isOwner || isSuperadmin || isAssignedCarrier || isAssignedDriver
+
+  // Scale-ticket photos (metadata only — images stream from their own route).
+  const attachments = canSeeContacts
+    ? await db.select({
+        id: loadAttachments.id,
+        kind: loadAttachments.kind,
+        filename: loadAttachments.filename,
+        contentType: loadAttachments.contentType,
+        sizeBytes: loadAttachments.sizeBytes,
+        createdAt: loadAttachments.createdAt,
+      }).from(loadAttachments).where(eq(loadAttachments.loadId, id)).orderBy(asc(loadAttachments.createdAt))
+    : []
   const visibleLoad = canSeeContacts
     ? load
     : { ...load, pickupContactName: null, pickupContactPhone: null, deliveryContactName: null, deliveryContactPhone: null }
@@ -149,5 +161,6 @@ export default defineEventHandler(async (event) => {
     assignedCompany,
     assignedDriver,
     assignedVehicle,
+    attachments,
   }
 })

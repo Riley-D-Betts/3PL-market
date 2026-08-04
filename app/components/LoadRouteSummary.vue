@@ -4,10 +4,14 @@ interface RouteLoad {
   pickupAddress: string
   pickupCity: string
   pickupState: string
+  pickupLat?: number | null
+  pickupLng?: number | null
   jobName?: string | null
   deliveryAddress: string
   deliveryCity: string
   deliveryState: string
+  deliveryLat?: number | null
+  deliveryLng?: number | null
   pickupWindowStart: string | Date
   pickupWindowEnd: string | Date
   materialType: string
@@ -16,6 +20,7 @@ interface RouteLoad {
   quantity?: string | null
   notes?: string | null
   travelTimeAllowanceMin?: number | null
+  deliveredTons?: number | null
   // Present only for viewers entitled to them (server nulls them otherwise).
   pickupContactName?: string | null
   pickupContactPhone?: string | null
@@ -24,6 +29,14 @@ interface RouteLoad {
 }
 
 defineProps<{ load: RouteLoad }>()
+
+/** Navigation link: exact pin when we have one, address search otherwise. */
+function mapsUrl(lat: number | null | undefined, lng: number | null | undefined, ...address: (string | null | undefined)[]): string {
+  const query = lat != null && lng != null
+    ? `${lat},${lng}`
+    : encodeURIComponent(address.filter(Boolean).join(', '))
+  return `https://www.google.com/maps/search/?api=1&query=${query}`
+}
 </script>
 
 <template>
@@ -36,7 +49,15 @@ defineProps<{ load: RouteLoad }>()
         <p class="font-medium text-highlighted" :class="{ 'font-normal text-sm': load.pickupLocationName }">
           {{ load.pickupCity }}, {{ load.pickupState }}
         </p>
-        <p class="text-sm text-muted">{{ load.pickupAddress }}</p>
+        <p class="text-sm text-muted">
+          <a
+            :href="mapsUrl(load.pickupLat, load.pickupLng, load.pickupAddress, load.pickupCity, load.pickupState)"
+            target="_blank"
+            rel="noopener"
+            class="underline decoration-dotted underline-offset-2 hover:text-highlighted"
+            title="Open in Google Maps"
+          >{{ load.pickupAddress }} <UIcon name="i-lucide-external-link" class="size-3 inline align-baseline" /></a>
+        </p>
         <p class="text-sm text-muted mt-1">
           First load {{ formatDateTime(load.pickupWindowStart) }} · last load {{ formatDateTime(load.pickupWindowEnd) }}
         </p>
@@ -54,7 +75,15 @@ defineProps<{ load: RouteLoad }>()
         <p class="font-medium text-highlighted" :class="{ 'font-normal text-sm': load.jobName }">
           {{ load.deliveryCity }}, {{ load.deliveryState }}
         </p>
-        <p class="text-sm text-muted">{{ load.deliveryAddress }}</p>
+        <p class="text-sm text-muted">
+          <a
+            :href="mapsUrl(load.deliveryLat, load.deliveryLng, load.deliveryAddress, load.deliveryCity, load.deliveryState)"
+            target="_blank"
+            rel="noopener"
+            class="underline decoration-dotted underline-offset-2 hover:text-highlighted"
+            title="Open in Google Maps"
+          >{{ load.deliveryAddress }} <UIcon name="i-lucide-external-link" class="size-3 inline align-baseline" /></a>
+        </p>
         <p v-if="load.deliveryContactName" class="text-sm mt-1">
           <UIcon name="i-lucide-phone" class="size-3.5 inline text-muted" />
           {{ load.deliveryContactName }}<span v-if="load.deliveryContactPhone" class="text-muted"> · {{ load.deliveryContactPhone }}</span>
@@ -68,6 +97,7 @@ defineProps<{ load: RouteLoad }>()
         <p class="font-medium text-highlighted">
           {{ MATERIAL_TYPE_LABELS[load.materialType as keyof typeof MATERIAL_TYPE_LABELS] ?? load.materialType }}
           · {{ formatWeight(load.weightLbs) }}<span v-if="load.quantity"> · {{ load.quantity }}</span>
+          <span v-if="load.deliveredTons != null" class="text-success"> · delivered {{ load.deliveredTons }} tons</span>
         </p>
         <p v-if="load.materialDescription" class="text-sm text-muted">{{ load.materialDescription }}</p>
         <p v-if="load.travelTimeAllowanceMin != null" class="text-sm text-muted mt-1">

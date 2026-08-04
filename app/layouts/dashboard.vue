@@ -33,7 +33,23 @@ const roleLabel = computed(() => {
   }
 })
 
+const toast = useToast()
+
 async function logout() {
+  // Drivers sign off first: an active shift needs its ending mileage and
+  // fuel usage before the day is over. If the check itself fails (expired
+  // session, network), fall through — logout must never be blocked.
+  if (user.value?.role === 'driver') {
+    try {
+      const { shift } = await $fetch('/api/driver/shift')
+      if (shift) {
+        toast.add({ title: 'End your shift first', description: 'Enter your ending mileage and fuel usage to sign off.', color: 'warning' })
+        await navigateTo('/driver?end-shift=1')
+        return
+      }
+    }
+    catch { /* proceed with logout */ }
+  }
   await $fetch('/api/auth/logout', { method: 'POST' })
   await clear()
   await navigateTo('/login')

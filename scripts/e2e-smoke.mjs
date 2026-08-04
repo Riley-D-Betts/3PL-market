@@ -27,13 +27,14 @@ function check(label, condition, detail = '') {
 function client() {
   let cookie = ''
   return async function request(path, { method = 'GET', body, expect } = {}) {
+    const isForm = body instanceof FormData
     const res = await fetch(`${BASE}${path}`, {
       method,
       headers: {
-        ...(body ? { 'content-type': 'application/json' } : {}),
+        ...(body && !isForm ? { 'content-type': 'application/json' } : {}),
         ...(cookie ? { cookie } : {}),
       },
-      body: body ? JSON.stringify(body) : undefined,
+      body: body ? (isForm ? body : JSON.stringify(body)) : undefined,
       redirect: 'manual',
     })
     const setCookie = res.headers.get('set-cookie')
@@ -54,6 +55,15 @@ async function login(email) {
   const c = client()
   await c('/api/auth/login', { method: 'POST', body: { email, password: PASSWORD }, expect: 200 })
   return c
+}
+
+const CLEAN_PRETRIP = { lights: true, tires: true, brakes: true, steering: true, fluids: true, mirrors: true, horn: true, coupling: true, safety: true }
+const TICKET_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64')
+
+function ticketForm() {
+  const form = new FormData()
+  form.append('file', new Blob([TICKET_PNG], { type: 'image/png' }), 'e2e-ticket.png')
+  return form
 }
 
 console.log(`E2E smoke against ${BASE}`)
@@ -137,7 +147,7 @@ const { data: wonDetail } = await carrier2(`/api/loads/${loadId}`, { expect: 200
 check('assigned carrier sees contacts', wonDetail.load.pickupContactName === 'E2E Gate — Sam')
 check('assigned carrier sees the invoice email', wonDetail.invoiceEmail === 'ap@boisebuilders.test')
 
-// ── 5. Carrier2 creates a driver and assigns them ───────────────────────────
+// ── 5. Carrier2 creates a driver + truck and assigns them ───────────────────
 console.log('\n5. driver assignment')
 const driverEmail = `e2e-driver-${Date.now()}@demo.test`
 const { data: driverRes } = await carrier2('/api/fleet/drivers', {
@@ -145,11 +155,40 @@ const { data: driverRes } = await carrier2('/api/fleet/drivers', {
   expect: 201,
   body: { name: 'E2E Driver', email: driverEmail, password: PASSWORD },
 })
+const { data: truckRes } = await carrier2('/api/fleet/vehicles', {
+  method: 'POST',
+  expect: 201,
+  body: { type: 'dump_truck', plate: `E2E-${Date.now()}`, capacityLbs: 44000, odometerMi: 120000 },
+})
+const truckId = truckRes.vehicle.id
 await carrier2(`/api/loads/${loadId}/assign`, { method: 'POST', expect: 200, body: { driverId: driverRes.driver.id } })
 const driver = await login(driverEmail)
 
-// ── 6. Arrival-gated pickup/delivery with logs ──────────────────────────────
-console.log('\n6. arrival flow')
+// ── 6. Shift-gated, arrival-gated pickup/delivery with paperwork ────────────
+console.log('\n6. shift + arrival flow')
+const { status: offDuty } = await driver(`/api/driver/loads/${loadId}/arrive-pickup`, { method: 'POST' })
+check('load actions are refused off shift with 409', offDuty === 409)
+
+const { data: shiftInfo } = await driver('/api/driver/shift', { expect: 200 })
+check('driver sees company trucks for sign-on', shiftInfo.shift === null && shiftInfo.fleet.some(v => v.id === truckId))
+
+const { status: badPretrip } = await driver('/api/driver/shift/start', {
+  method: 'POST',
+  body: { vehicleId: truckId, startOdometerMi: 120000, checklist: { ...CLEAN_PRETRIP, brakes: false } },
+})
+check('failed pre-trip item without a defects note is refused', badPretrip === 400)
+
+await driver('/api/driver/shift/start', {
+  method: 'POST',
+  expect: 201,
+  body: { vehicleId: truckId, startOdometerMi: 120000, checklist: CLEAN_PRETRIP },
+})
+const { status: dupShift } = await driver('/api/driver/shift/start', {
+  method: 'POST',
+  body: { vehicleId: truckId, startOdometerMi: 120000, checklist: CLEAN_PRETRIP },
+})
+check('a second active shift is refused with 409', dupShift === 409)
+
 const { status: premature } = await driver(`/api/driver/loads/${loadId}/pickup`, { method: 'POST' })
 check('pickup before arrival is refused with 409', premature === 409)
 
@@ -160,12 +199,36 @@ check('double arrival is refused with 409', doubleArrive === 409)
 const { data: pickedUp } = await driver(`/api/driver/loads/${loadId}/pickup`, { method: 'POST', expect: 200 })
 check('pickup freezes detention (0 — no meaningful wait)', pickedUp.load.pickupDetentionCents === 0)
 
-const { status: prematureDeliver } = await driver(`/api/driver/loads/${loadId}/deliver`, { method: 'POST' })
+// The ticket gate is checked before the arrival gate — assert it first,
+// then upload so the arrival 409 below is genuinely the arrival guard.
+const { status: noTicket } = await driver(`/api/driver/loads/${loadId}/deliver`, { method: 'POST', body: { deliveredTons: 9.9 } })
+check('deliver without a scale-ticket photo is refused with 409', noTicket === 409)
+
+const { data: uploaded } = await driver(`/api/driver/loads/${loadId}/ticket`, { method: 'POST', body: ticketForm(), expect: 201 })
+check('ticket photo uploads', uploaded.attachment.contentType === 'image/png')
+const { status: imgStatus } = await carrier2(`/api/loads/${loadId}/attachments/${uploaded.attachment.id}`)
+check('assigned carrier can fetch the ticket image', imgStatus === 200)
+const granitePeek = await login('carrier@demo.test')
+const { status: foreignImg } = await granitePeek(`/api/loads/${loadId}/attachments/${uploaded.attachment.id}`)
+check('non-assigned carrier cannot fetch the ticket image', foreignImg === 403)
+
+const { status: prematureDeliver } = await driver(`/api/driver/loads/${loadId}/deliver`, { method: 'POST', body: { deliveredTons: 9.9 } })
 check('deliver before delivery arrival is refused with 409', prematureDeliver === 409)
 
 await driver(`/api/driver/loads/${loadId}/arrive-delivery`, { method: 'POST', expect: 200 })
-const { data: delivered } = await driver(`/api/driver/loads/${loadId}/deliver`, { method: 'POST', expect: 200 })
+
+const { status: noTons } = await driver(`/api/driver/loads/${loadId}/deliver`, { method: 'POST', body: {} })
+check('deliver without tonnage is refused', noTons === 400)
+
+const { data: delivered } = await driver(`/api/driver/loads/${loadId}/deliver`, { method: 'POST', expect: 200, body: { deliveredTons: 9.9 } })
 check('delivery freezes detention (0)', delivered.load.deliveryDetentionCents === 0)
+check('delivery records the hauled tonnage', delivered.load.deliveredTons === 9.9)
+
+const { status: badEnd } = await driver('/api/driver/shift/end', { method: 'POST', body: { endOdometerMi: 119000, fuelGallons: 30 } })
+check('ending mileage below beginning mileage is refused', badEnd === 422)
+await driver('/api/driver/shift/end', { method: 'POST', expect: 200, body: { endOdometerMi: 120180, fuelGallons: 32.5 } })
+const { data: fleetAfter } = await carrier2('/api/fleet/vehicles', { expect: 200 })
+check('ending mileage advances the truck odometer', fleetAfter.vehicles.find(v => v.id === truckId)?.odometerMi === 120180)
 
 // ── 7. Shipper confirms; timeline shows the full journey ────────────────────
 console.log('\n7. confirm + timeline')
@@ -240,12 +303,23 @@ console.log('\n8d. manual (off-platform) load lifecycle')
   check('manual load never appears on the board', !c2board.loads.some(l => l.id === manual.load.id))
 
   const extDriverClient = await login(manualDriverEmail)
+  const { data: extShiftInfo } = await extDriverClient('/api/driver/shift', { expect: 200 })
+  const extTruck = extShiftInfo.fleet[0]
+  await extDriverClient('/api/driver/shift/start', {
+    method: 'POST',
+    expect: 201,
+    body: { vehicleId: extTruck.id, startOdometerMi: extTruck.odometerMi ?? 0, checklist: CLEAN_PRETRIP },
+  })
   await extDriverClient(`/api/driver/loads/${manual.load.id}/arrive-pickup`, { method: 'POST', expect: 200 })
-  await extDriverClient(`/api/driver/loads/${manual.load.id}/pickup`, { method: 'POST', expect: 200 })
+  const { data: manualPicked } = await extDriverClient(`/api/driver/loads/${manual.load.id}/pickup`, { method: 'POST', expect: 200 })
+  check('pickup adopts the shift truck when dispatch left it open', manualPicked.load.assignedVehicleId === extTruck.id)
   await extDriverClient(`/api/driver/loads/${manual.load.id}/arrive-delivery`, { method: 'POST', expect: 200 })
-  await extDriverClient(`/api/driver/loads/${manual.load.id}/deliver`, { method: 'POST', expect: 200 })
+  await extDriverClient(`/api/driver/loads/${manual.load.id}/ticket`, { method: 'POST', body: ticketForm(), expect: 201 })
+  await extDriverClient(`/api/driver/loads/${manual.load.id}/deliver`, { method: 'POST', expect: 200, body: { deliveredTons: 10 } })
   const { data: confirmed } = await granite(`/api/loads/${manual.load.id}/confirm`, { method: 'POST', expect: 200 })
   check('carrier admin confirms the manual load to completed', confirmed.load.status === 'completed')
+  // Sign the throwaway driver off so re-runs don't accumulate open shifts.
+  await extDriverClient('/api/driver/shift/end', { method: 'POST', expect: 200, body: { endOdometerMi: (extTruck.odometerMi ?? 0) + 40, fuelGallons: 6 } })
 }
 
 console.log('\n8e. next-leg planner')

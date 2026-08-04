@@ -37,3 +37,17 @@ export interface SessionUser {
 }
 
 // UI labels and formatters live in shared/utils/format.ts (auto-imported by Nuxt).
+
+/** Pre-trip inspection items a driver checks off before starting a shift. */
+export const PRETRIP_ITEMS = {
+  lights: 'Lights & reflectors',
+  tires: 'Tires & wheels',
+  brakes: 'Brakes (service & parking)',
+  steering: 'Steering & suspension',
+  fluids: 'Fluid levels & leaks',
+  mirrors: 'Mirrors, glass & wipers',
+  horn: 'Horn & backup alarm',
+  coupling: 'Coupling / tailgate / bed',
+  safety: 'Fire extinguisher & triangles',
+} as const
+export type PretripItem = keyof typeof PRETRIP_ITEMS

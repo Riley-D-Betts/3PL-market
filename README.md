@@ -99,6 +99,14 @@ The driver's flow is **arrive → load → depart** at each stop: "Arrived at pi
 - **First / last load time**: the pickup window is phrased the way dirt jobs run — first truck loads at, last truck loads by.
 - **Travel time allowance**: an optional paid-travel-time figure both parties see with the rate.
 
+### The driver's day
+
+- **Sign on**: before any load action, a driver starts a shift — pick a **truck** from the company fleet, complete a **pre-trip inspection checklist** (any failed item requires a defects note), and enter **beginning mileage**. Arrive/pickup/deliver actions are server-refused (409) until they're signed on.
+- **Navigate**: pickup and delivery addresses (and dropped pins) are clickable links straight into Google Maps.
+- **Deliver with paperwork**: marking a load delivered requires a **photo of the scale ticket** (uploaded from the phone camera, stored in Postgres, visible to the shipper and carrier on the load) and the **delivered tonnage** — recorded on the load and shown to both parties.
+- **Sign off**: logging out intercepts an active shift and requires **ending mileage** and **fuel usage**; mileage advances the truck's odometer, and the carrier sees every shift (truck, pre-trip result, miles, fuel, defects) in a Recent Shifts table on the Drivers page.
+- If dispatch never picked a truck for a load, pickup automatically attaches the shift's truck — so per-vehicle reports stay accurate.
+
 ### Blacklist, contacts & invoicing
 
 - A shipper can **block a carrier company** (from any bid row, managed in Settings): blocked carriers don't see that shipper's loads on the board, can't bid or accept (server-enforced inside the same transactions that decide races), and their pending bids are rejected on block.

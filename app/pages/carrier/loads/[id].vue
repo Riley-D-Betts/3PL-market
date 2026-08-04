@@ -209,6 +209,7 @@ const mapPoints = computed(() => {
 
       <div class="lg:col-span-2 space-y-6 self-start">
         <LoadChargesCard :load="load" />
+        <TicketGallery :load-id="load.id" :attachments="data?.attachments ?? []" />
         <UCard>
           <template #header>
             <h2 class="font-semibold text-highlighted">History</h2>
