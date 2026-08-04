@@ -16,7 +16,7 @@ Then open <http://localhost:3000>. On first boot the app runs its database migra
 
 ### Demo accounts
 
-All demo passwords are `Password123!`.
+With the compose defaults, **demo mode** is on: the login page lists every account — just click one to explore that role. The passwords below only matter when demo mode is off; they are all `Password123!`.
 
 | Role | Email | What to try |
 |---|---|---|
@@ -37,6 +37,7 @@ Copy `.env.example` to `.env` (compose has safe dev defaults built in):
 | `DATABASE_URL` | Postgres connection string |
 | `NUXT_SESSION_PASSWORD` | Secret sealing session cookies — **set your own 32+ char value in production** |
 | `NUXT_SEED_DEMO_DATA` | `true` to seed demo data on boot (idempotent — skipped when data exists) |
+| `NUXT_PUBLIC_DEMO_MODE` | `true` turns the login page into a one-click account picker (no passwords). Compose defaults it on for instant demos — **never enable on a real deployment** |
 | `POSTGRES_PASSWORD` | Compose-only: password for the bundled Postgres |
 | `NUXT_MIGRATIONS_DIR` | Migrations folder override (preset in the Docker image) |
 
@@ -72,6 +73,12 @@ Load state machine: `draft → posted → awarded → picked_up → delivered �
 ### Arrival logs & detention fees
 
 The driver's flow is **arrive → load → depart** at each stop: "Arrived at pickup" starts the wait clock (a `load_events` entry both parties see on the timeline), and marking the load picked up/delivered closes it. Waiting beyond the bid's free window accrues detention at the agreed hourly rate, prorated per minute; the fee is **frozen in the same transaction as the departure** and shown as line items (line haul + pickup/delivery detention = total due) to both shipper and carrier. Mid-wait, both dashboards show a live "accruing" estimate. Pickup/delivery cannot be marked without the matching arrival log.
+
+### Dispatch calendar & maps
+
+- **Calendar** (`/carrier/calendar`): month grid of the carrier's won loads placed on their pickup windows, status-colored, with "needs driver" warnings; clicking a day lists its pickups with times, drivers and links for scheduling the day.
+- **Maps**: every load detail page shows a Leaflet/OpenStreetMap route map with pickup and delivery pins; the carrier dispatch view also pins the assigned driver's **home base** (set per driver in the Drivers page) to help pick who's closest.
+- Coordinates come from best-effort **Nominatim geocoding** at load/driver save time, cached city-level in the database (the demo seed prefills real Idaho coordinates, so maps work offline). Missing coordinates degrade gracefully — the map simply doesn't render.
 
 ### Blacklist, contacts & invoicing
 

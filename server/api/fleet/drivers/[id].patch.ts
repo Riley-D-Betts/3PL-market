@@ -32,6 +32,15 @@ export default defineEventHandler(async (event) => {
     // Revoke sessions sealed with the old password.
     set.sessionVersion = sql`${users.sessionVersion} + 1`
   }
+  if (body.homeBaseCity !== undefined || body.homeBaseState !== undefined) {
+    const city = body.homeBaseCity ?? null
+    const state = body.homeBaseState ?? null
+    set.homeBaseCity = city
+    set.homeBaseState = state
+    const point = city && state ? await geocodeCityState(city, state) : null
+    set.homeBaseLat = point?.lat ?? null
+    set.homeBaseLng = point?.lng ?? null
+  }
 
   const [driver] = await db.update(users)
     .set(set)

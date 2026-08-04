@@ -69,6 +69,11 @@ export const users = pgTable(
     sessionVersion: integer('session_version').notNull().default(0),
     /** Shippers: where carriers should send invoices. Falls back to email when null. */
     billingEmail: text('billing_email'),
+    /** Drivers: where the truck lives — shown on dispatch maps to pick nearby drivers. */
+    homeBaseCity: text('home_base_city'),
+    homeBaseState: text('home_base_state'),
+    homeBaseLat: doublePrecision('home_base_lat'),
+    homeBaseLng: doublePrecision('home_base_lng'),
     ...timestamps,
   },
   table => [
@@ -232,6 +237,24 @@ export const loadEvents = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   table => [index('load_events_load_seq_idx').on(table.loadId, table.seq)],
+)
+
+/**
+ * City-level geocoding cache (Nominatim results). Lookups are keyed on the
+ * normalized "city, state" query; found=false rows suppress refetching
+ * unresolvable places.
+ */
+export const geocodeCache = pgTable(
+  'geocode_cache',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    query: text('query').notNull(),
+    lat: doublePrecision('lat'),
+    lng: doublePrecision('lng'),
+    found: boolean('found').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  table => [uniqueIndex('geocode_cache_query_unique').on(table.query)],
 )
 
 /** Carriers a shipper refuses to work with — hidden board, no bids/accepts. */

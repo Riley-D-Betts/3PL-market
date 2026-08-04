@@ -28,6 +28,20 @@ function waitingText(arrivedAt: string | Date): string {
   return text
 }
 
+const mapPoints = computed(() => {
+  const l = load.value
+  if (!l) return []
+  const points: { kind: 'pickup' | 'delivery' | 'home', lat: number | null, lng: number | null, label: string }[] = [
+    { kind: 'pickup', lat: l.pickupLat, lng: l.pickupLng, label: `Pickup — ${l.pickupCity}, ${l.pickupState}` },
+    { kind: 'delivery', lat: l.deliveryLat, lng: l.deliveryLng, label: `Delivery — ${l.deliveryCity}, ${l.deliveryState}` },
+  ]
+  const d = data.value?.assignedDriver
+  if (d?.homeBaseLat != null && d?.homeBaseLng != null) {
+    points.push({ kind: 'home', lat: d.homeBaseLat, lng: d.homeBaseLng, label: `Home base — ${d.homeBaseCity ?? ''}` })
+  }
+  return points
+})
+
 async function act(path: string, success: string) {
   acting.value = true
   try {
@@ -56,6 +70,7 @@ async function act(path: string, success: string) {
 
     <UCard>
       <LoadRouteSummary :load="load" />
+      <LoadMap class="mt-4" :points="mapPoints" />
       <div class="mt-4 pt-4 border-t border-default text-sm">
         <p class="text-xs uppercase tracking-wide text-muted">Shipper contact</p>
         <p class="font-medium text-highlighted">{{ data?.shipper?.name }}</p>

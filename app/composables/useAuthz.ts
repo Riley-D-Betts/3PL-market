@@ -33,6 +33,7 @@ export function useAuthz() {
       case 'carrier_admin':
         return [
           { label: 'Dashboard', to: '/carrier', icon: 'i-lucide-layout-dashboard' },
+          { label: 'Calendar', to: '/carrier/calendar', icon: 'i-lucide-calendar-days' },
           { label: 'Load board', to: '/carrier/board', icon: 'i-lucide-search' },
           { label: 'Won loads', to: '/carrier/loads', icon: 'i-lucide-truck' },
           { label: 'Bids', to: '/carrier/bids', icon: 'i-lucide-gavel' },

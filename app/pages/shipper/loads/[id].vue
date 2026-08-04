@@ -45,6 +45,15 @@ async function blockCarrier(companyId: string, companyName: string) {
 
 const pendingBids = computed(() => (data.value?.bids ?? []).filter(b => b.status === 'pending'))
 const decidedBids = computed(() => (data.value?.bids ?? []).filter(b => b.status !== 'pending'))
+
+const mapPoints = computed(() => {
+  const l = load.value
+  if (!l) return []
+  return [
+    { kind: 'pickup' as const, lat: l.pickupLat, lng: l.pickupLng, label: `Pickup — ${l.pickupCity}, ${l.pickupState}` },
+    { kind: 'delivery' as const, lat: l.deliveryLat, lng: l.deliveryLng, label: `Delivery — ${l.deliveryCity}, ${l.deliveryState}` },
+  ]
+})
 </script>
 
 <template>
@@ -84,6 +93,7 @@ const decidedBids = computed(() => (data.value?.bids ?? []).filter(b => b.status
 
     <UCard>
       <LoadRouteSummary :load="load" />
+      <LoadMap class="mt-4" :points="mapPoints" />
       <div v-if="data?.assignedCompany" class="mt-4 pt-4 border-t border-default grid gap-2 sm:grid-cols-3 text-sm">
         <div>
           <p class="text-xs uppercase tracking-wide text-muted">Carrier</p>

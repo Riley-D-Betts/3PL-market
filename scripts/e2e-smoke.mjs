@@ -81,6 +81,8 @@ const { data: created } = await shipper('/api/loads', {
 })
 const loadId = created.load.id
 check('load created and posted', created.load.status === 'posted')
+check('load geocoded from the seeded cache (Boise pickup)', Math.abs((created.load.pickupLat ?? 0) - 43.615) < 0.01)
+check('load geocoded from the seeded cache (Meridian delivery)', Math.abs((created.load.deliveryLat ?? 0) - 43.6121) < 0.01)
 
 // ── 2. Board visibility ─────────────────────────────────────────────────────
 console.log('\n2. board visibility')
@@ -166,7 +168,35 @@ for (const expected of ['created', 'posted', 'bid_placed', 'awarded', 'driver_as
 }
 
 // ── 8. Block flow round-trip ────────────────────────────────────────────────
-console.log('\n8. block / unblock round-trip')
+console.log('\n8. maps & home base data')
+const granite = await login('carrier@demo.test')
+const { data: fleetDrivers } = await granite('/api/fleet/drivers', { expect: 200 })
+const dale = fleetDrivers.drivers.find(d => d.email === 'driver1@demo.test')
+check('seeded driver has a geocoded home base', dale?.homeBaseCity === 'Boise' && typeof dale?.homeBaseLat === 'number')
+const { data: graniteWon } = await granite('/api/carrier/loads', { expect: 200 })
+const withDriver = graniteWon.loads.find(l => l.assignedDriverId)
+if (withDriver) {
+  const { data: dispatch } = await granite(`/api/loads/${withDriver.id}`, { expect: 200 })
+  check('dispatch view exposes the assigned driver home base', typeof dispatch.assignedDriver?.homeBaseLat === 'number')
+}
+
+console.log('\n9. demo mode (skipped when the flag is off)')
+{
+  const probe = client()
+  const { status: listStatus, data: accounts } = await probe('/api/auth/demo-accounts')
+  if (listStatus === 404) {
+    console.log('  --   demo mode off — endpoints correctly 404')
+  }
+  else {
+    check('demo-accounts lists the seeded shipper', accounts.accounts.some(a => a.email === 'shipper@demo.test'))
+    const target = accounts.accounts.find(a => a.email === 'shipper@demo.test')
+    await probe('/api/auth/demo-login', { method: 'POST', body: { userId: target.id }, expect: 200 })
+    const { data: me } = await probe('/api/auth/me', { expect: 200 })
+    check('demo-login yields a working session', me.user.email === 'shipper@demo.test')
+  }
+}
+
+console.log('\n10. block / unblock round-trip')
 const { data: companies } = await shipper('/api/shipper/blocks', { expect: 200 })
 const alreadyBlocked = companies.blocks.length
 await shipper('/api/shipper/blocks', { method: 'POST', expect: 201, body: { companyId: wonDetail.load.assignedCompanyId, reason: 'E2E test block' } })

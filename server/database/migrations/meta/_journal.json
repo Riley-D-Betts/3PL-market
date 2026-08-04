@@ -22,6 +22,13 @@
       "when": 1785814321218,
       "tag": "0002_graceful_whiplash",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1785817565265,
+      "tag": "0003_flawless_banshee",
+      "breakpoints": true
     }
   ]
 }

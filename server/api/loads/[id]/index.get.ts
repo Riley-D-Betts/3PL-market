@@ -107,7 +107,10 @@ export default defineEventHandler(async (event) => {
     ? await db.query.companies.findFirst({ where: eq(companies.id, load.assignedCompanyId), columns: { id: true, name: true } })
     : null
   const assignedDriver = load.assignedDriverId
-    ? await db.query.users.findFirst({ where: eq(users.id, load.assignedDriverId), columns: { id: true, name: true, phone: true } })
+    ? await db.query.users.findFirst({
+        where: eq(users.id, load.assignedDriverId),
+        columns: { id: true, name: true, phone: true, homeBaseCity: true, homeBaseState: true, homeBaseLat: true, homeBaseLng: true },
+      })
     : null
   const assignedVehicle = load.assignedVehicleId
     ? await db.query.vehicles.findFirst({ where: eq(vehicles.id, load.assignedVehicleId), columns: { id: true, type: true, plate: true } })

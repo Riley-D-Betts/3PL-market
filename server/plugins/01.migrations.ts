@@ -17,4 +17,7 @@ export default defineNitroPlugin(async () => {
   if ((process.env.NUXT_SESSION_PASSWORD ?? '').startsWith('insecure-dev-session-password')) {
     console.warn('[security] NUXT_SESSION_PASSWORD is the compose default — set a private 32+ character secret in production.')
   }
+  if (config.public.demoMode) {
+    console.warn('[security] Demo mode is ON (NUXT_PUBLIC_DEMO_MODE) — the login page offers password-less access to every account. Never enable this on a real deployment.')
+  }
 })

@@ -107,6 +107,10 @@ export const blockInputSchema = z.object({
   reason: z.string().trim().max(500).optional(),
 })
 
+export const demoLoginSchema = z.object({
+  userId: z.uuid(),
+})
+
 export const awardSchema = z.object({
   bidId: z.uuid(),
 })
@@ -132,6 +136,8 @@ export const driverCreateSchema = z.object({
   email,
   password,
   phone,
+  homeBaseCity: z.string().trim().min(1).max(100).optional(),
+  homeBaseState: z.string().trim().min(1).max(50).optional(),
 })
 
 export const driverPatchSchema = z.object({
@@ -139,6 +145,8 @@ export const driverPatchSchema = z.object({
   phone: z.string().trim().max(50).nullable().optional(),
   password: password.optional(),
   isActive: z.boolean().optional(),
+  homeBaseCity: z.string().trim().min(1).max(100).nullable().optional(),
+  homeBaseState: z.string().trim().min(1).max(50).nullable().optional(),
 })
 
 export const assignSchema = z.object({

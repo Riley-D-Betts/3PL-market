@@ -75,6 +75,15 @@ const withdraw = () => act(async () => {
   if (!myPendingBid.value) return
   await $fetch(`/api/bids/${myPendingBid.value.id}`, { method: 'DELETE' })
 }, 'Bid withdrawn')
+
+const mapPoints = computed(() => {
+  const l = load.value
+  if (!l) return []
+  return [
+    { kind: 'pickup' as const, lat: l.pickupLat, lng: l.pickupLng, label: `Pickup — ${l.pickupCity}, ${l.pickupState}` },
+    { kind: 'delivery' as const, lat: l.deliveryLat, lng: l.deliveryLng, label: `Delivery — ${l.deliveryCity}, ${l.deliveryState}` },
+  ]
+})
 </script>
 
 <template>
@@ -95,6 +104,7 @@ const withdraw = () => act(async () => {
 
     <UCard>
       <LoadRouteSummary :load="load" />
+      <LoadMap class="mt-4" :points="mapPoints" />
     </UCard>
 
     <UCard v-if="load.status === 'posted'">
