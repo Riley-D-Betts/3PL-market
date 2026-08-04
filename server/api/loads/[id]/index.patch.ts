@@ -21,8 +21,21 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 400, statusMessage: 'Pickup window start must be before its end' })
     }
 
+    // Re-geocode a stop when its city/state changed.
+    const geo: Partial<typeof loads.$inferInsert> = {}
+    if ((body.pickupCity && body.pickupCity !== load.pickupCity) || (body.pickupState && body.pickupState !== load.pickupState)) {
+      const point = await geocodeCityState(body.pickupCity ?? load.pickupCity, body.pickupState ?? load.pickupState)
+      geo.pickupLat = point?.lat ?? null
+      geo.pickupLng = point?.lng ?? null
+    }
+    if ((body.deliveryCity && body.deliveryCity !== load.deliveryCity) || (body.deliveryState && body.deliveryState !== load.deliveryState)) {
+      const point = await geocodeCityState(body.deliveryCity ?? load.deliveryCity, body.deliveryState ?? load.deliveryState)
+      geo.deliveryLat = point?.lat ?? null
+      geo.deliveryLng = point?.lng ?? null
+    }
+
     const [row] = await tx.update(loads)
-      .set({ ...body, updatedAt: new Date() })
+      .set({ ...body, ...geo, updatedAt: new Date() })
       .where(and(eq(loads.id, id), eq(loads.status, 'draft')))
       .returning()
     return row!

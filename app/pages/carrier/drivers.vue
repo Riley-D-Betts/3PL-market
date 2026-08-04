@@ -6,7 +6,7 @@ const toast = useToast()
 const { data, refresh } = await useFetch('/api/fleet/drivers')
 
 const showForm = ref(false)
-const form = reactive({ name: '', email: '', phone: '', password: '' })
+const form = reactive({ name: '', email: '', phone: '', password: '', homeBaseCity: '', homeBaseState: '' })
 const acting = ref(false)
 
 async function createDriver() {
@@ -14,9 +14,14 @@ async function createDriver() {
   try {
     await $fetch('/api/fleet/drivers', {
       method: 'POST',
-      body: { ...form, phone: form.phone || undefined },
+      body: {
+        ...form,
+        phone: form.phone || undefined,
+        homeBaseCity: form.homeBaseCity || undefined,
+        homeBaseState: form.homeBaseState || undefined,
+      },
     })
-    Object.assign(form, { name: '', email: '', phone: '', password: '' })
+    Object.assign(form, { name: '', email: '', phone: '', password: '', homeBaseCity: '', homeBaseState: '' })
     showForm.value = false
     await refresh()
     toast.add({ title: 'Driver account created', color: 'success' })
@@ -54,6 +59,24 @@ async function resetPassword(driverId: string) {
     toast.add({ title: apiErrorMessage(err), color: 'error' })
   }
 }
+
+async function editHomeBase(driver: { id: string, homeBaseCity: string | null, homeBaseState: string | null }) {
+  const city = window.prompt('Home base city (empty to clear):', driver.homeBaseCity ?? '')
+  if (city === null) return
+  const state = city ? window.prompt('Home base state:', driver.homeBaseState ?? 'ID') : null
+  if (city && state === null) return
+  try {
+    await $fetch(`/api/fleet/drivers/${driver.id}`, {
+      method: 'PATCH',
+      body: { homeBaseCity: city || null, homeBaseState: city ? (state || null) : null },
+    })
+    await refresh()
+    toast.add({ title: city ? 'Home base updated' : 'Home base cleared', color: 'success' })
+  }
+  catch (err) {
+    toast.add({ title: apiErrorMessage(err), color: 'error' })
+  }
+}
 </script>
 
 <template>
@@ -81,6 +104,12 @@ async function resetPassword(driverId: string) {
         <UFormField label="Initial password" required hint="Min. 8 characters">
           <UInput v-model="form.password" type="text" minlength="8" class="w-full" required />
         </UFormField>
+        <UFormField label="Home base city" hint="Shown on dispatch maps">
+          <UInput v-model="form.homeBaseCity" placeholder="Boise" class="w-full" />
+        </UFormField>
+        <UFormField label="Home base state">
+          <UInput v-model="form.homeBaseState" placeholder="ID" class="w-full" />
+        </UFormField>
         <div class="flex gap-2 sm:col-span-2">
           <UButton type="submit" :loading="acting">Create driver</UButton>
           <UButton variant="ghost" color="neutral" @click="showForm = false">Cancel</UButton>
@@ -100,11 +129,16 @@ async function resetPassword(driverId: string) {
           <div class="flex-1 min-w-48">
             <p class="font-medium text-highlighted">{{ driver.name }}</p>
             <p class="text-sm text-muted mt-0.5">{{ driver.email }}<span v-if="driver.phone"> · {{ driver.phone }}</span></p>
+            <p v-if="driver.homeBaseCity" class="text-sm text-muted mt-0.5">
+              <UIcon name="i-lucide-house" class="size-3.5 inline" />
+              {{ driver.homeBaseCity }}<span v-if="driver.homeBaseState">, {{ driver.homeBaseState }}</span>
+            </p>
           </div>
           <UBadge :color="driver.isActive ? 'success' : 'neutral'" variant="subtle">
             {{ driver.isActive ? 'active' : 'inactive' }}
           </UBadge>
           <div class="flex gap-1">
+            <UButton size="sm" variant="ghost" color="neutral" icon="i-lucide-house" title="Set home base" @click="editHomeBase(driver)" />
             <UButton size="sm" variant="ghost" color="neutral" icon="i-lucide-key-round" title="Reset password" @click="resetPassword(driver.id)" />
             <UButton
               size="sm"

@@ -73,6 +73,12 @@ Load state machine: `draft → posted → awarded → picked_up → delivered �
 
 The driver's flow is **arrive → load → depart** at each stop: "Arrived at pickup" starts the wait clock (a `load_events` entry both parties see on the timeline), and marking the load picked up/delivered closes it. Waiting beyond the bid's free window accrues detention at the agreed hourly rate, prorated per minute; the fee is **frozen in the same transaction as the departure** and shown as line items (line haul + pickup/delivery detention = total due) to both shipper and carrier. Mid-wait, both dashboards show a live "accruing" estimate. Pickup/delivery cannot be marked without the matching arrival log.
 
+### Dispatch calendar & maps
+
+- **Calendar** (`/carrier/calendar`): month grid of the carrier's won loads placed on their pickup windows, status-colored, with "needs driver" warnings; clicking a day lists its pickups with times, drivers and links for scheduling the day.
+- **Maps**: every load detail page shows a Leaflet/OpenStreetMap route map with pickup and delivery pins; the carrier dispatch view also pins the assigned driver's **home base** (set per driver in the Drivers page) to help pick who's closest.
+- Coordinates come from best-effort **Nominatim geocoding** at load/driver save time, cached city-level in the database (the demo seed prefills real Idaho coordinates, so maps work offline). Missing coordinates degrade gracefully — the map simply doesn't render.
+
 ### Blacklist, contacts & invoicing
 
 - A shipper can **block a carrier company** (from any bid row, managed in Settings): blocked carriers don't see that shipper's loads on the board, can't bid or accept (server-enforced inside the same transactions that decide races), and their pending bids are rejected on block.

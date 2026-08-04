@@ -10,6 +10,10 @@ export interface PublicUser {
   companyId: string | null
   isActive: boolean
   billingEmail: string | null
+  homeBaseCity: string | null
+  homeBaseState: string | null
+  homeBaseLat: number | null
+  homeBaseLng: number | null
   createdAt: Date
 }
 
@@ -23,6 +27,10 @@ export function toPublicUser(user: User): PublicUser {
     companyId: user.companyId,
     isActive: user.isActive,
     billingEmail: user.billingEmail,
+    homeBaseCity: user.homeBaseCity,
+    homeBaseState: user.homeBaseState,
+    homeBaseLat: user.homeBaseLat,
+    homeBaseLng: user.homeBaseLng,
     createdAt: user.createdAt,
   }
 }

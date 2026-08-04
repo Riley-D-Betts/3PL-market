@@ -1,12 +1,25 @@
 import { eq, sql } from 'drizzle-orm'
 import type { Db } from './client'
-import { bids, companies, loadEvents, loads, shipperCarrierBlocks, users, vehicles } from './schema'
+import { bids, companies, geocodeCache, loadEvents, loads, shipperCarrierBlocks, users, vehicles } from './schema'
 import { hashUserPassword } from '../utils/password'
 
 export const SUPERADMIN_EMAIL = 'admin@3plmarket.test'
 const DEMO_PASSWORD = 'Password123!'
 
 const hours = (n: number) => new Date(Date.now() + n * 3600_000)
+
+/** Real coordinates for the demo's Idaho cities — maps work with no network. */
+const CITY_COORDS: Record<string, { lat: number, lng: number }> = {
+  'boise': { lat: 43.6150, lng: -116.2023 },
+  'meridian': { lat: 43.6121, lng: -116.3915 },
+  'nampa': { lat: 43.5407, lng: -116.5635 },
+  'caldwell': { lat: 43.6629, lng: -116.6874 },
+  'twin falls': { lat: 42.5558, lng: -114.4701 },
+  'horseshoe bend': { lat: 43.9174, lng: -116.1962 },
+  'kuna': { lat: 43.4918, lng: -116.4201 },
+}
+
+const geo = (city: string) => CITY_COORDS[city.toLowerCase()]!
 
 /**
  * Idempotent demo seed: a no-op when the superadmin user already exists.
@@ -62,6 +75,10 @@ export async function seed(db: Db): Promise<boolean> {
       phone: '+1 208 555 0152',
       role: 'driver',
       companyId: granite!.id,
+      homeBaseCity: 'Boise',
+      homeBaseState: 'ID',
+      homeBaseLat: geo('boise').lat,
+      homeBaseLng: geo('boise').lng,
     }).returning()
 
     const [driver2] = await tx.insert(users).values({
@@ -71,6 +88,10 @@ export async function seed(db: Db): Promise<boolean> {
       phone: '+1 208 555 0153',
       role: 'driver',
       companyId: granite!.id,
+      homeBaseCity: 'Nampa',
+      homeBaseState: 'ID',
+      homeBaseLat: geo('nampa').lat,
+      homeBaseLng: geo('nampa').lng,
     }).returning()
 
     const [flatbed] = await tx.insert(vehicles).values({
@@ -146,6 +167,16 @@ export async function seed(db: Db): Promise<boolean> {
       reason: 'Damaged a load of drywall in June',
     })
 
+    // Prefill the geocode cache so demo cities never hit Nominatim.
+    await tx.insert(geocodeCache).values(
+      Object.entries(CITY_COORDS).map(([city, point]) => ({
+        query: `${city}, id`,
+        lat: point.lat,
+        lng: point.lng,
+        found: true,
+      })),
+    )
+
     const shipperId = shipper!.id
     const graniteId = granite!.id
 
@@ -155,9 +186,13 @@ export async function seed(db: Db): Promise<boolean> {
       pickupAddress: '900 Supply Yard Rd',
       pickupCity: 'Boise',
       pickupState: 'ID',
+      pickupLat: geo('boise').lat,
+      pickupLng: geo('boise').lng,
       deliveryAddress: '77 Subdivision Loop',
       deliveryCity: 'Meridian',
       deliveryState: 'ID',
+      deliveryLat: geo('meridian').lat,
+      deliveryLng: geo('meridian').lng,
       materialType: 'sand',
       materialDescription: 'Washed masonry sand',
       weightKg: 9000,
@@ -180,9 +215,13 @@ export async function seed(db: Db): Promise<boolean> {
       pickupAddress: 'Quarry Gate 3, 5500 Rock Rd',
       pickupCity: 'Nampa',
       pickupState: 'ID',
+      pickupLat: geo('nampa').lat,
+      pickupLng: geo('nampa').lng,
       deliveryAddress: '1420 Riverside Site Office',
       deliveryCity: 'Boise',
       deliveryState: 'ID',
+      deliveryLat: geo('boise').lat,
+      deliveryLng: geo('boise').lng,
       materialType: 'gravel',
       materialDescription: '3/4" crushed gravel',
       weightKg: 18000,
@@ -204,9 +243,13 @@ export async function seed(db: Db): Promise<boolean> {
       pickupAddress: 'Lumber Mill Dock B, 210 Timber Ave',
       pickupCity: 'Boise',
       pickupState: 'ID',
+      pickupLat: geo('boise').lat,
+      pickupLng: geo('boise').lng,
       deliveryAddress: '88 Commercial Build Site',
       deliveryCity: 'Twin Falls',
       deliveryState: 'ID',
+      deliveryLat: geo('twin falls').lat,
+      deliveryLng: geo('twin falls').lng,
       materialType: 'lumber',
       materialDescription: 'Framing lumber, banded bundles',
       weightKg: 12000,
@@ -260,9 +303,13 @@ export async function seed(db: Db): Promise<boolean> {
       pickupAddress: 'Steel Depot, 3300 Industry Blvd',
       pickupCity: 'Boise',
       pickupState: 'ID',
+      pickupLat: geo('boise').lat,
+      pickupLng: geo('boise').lng,
       deliveryAddress: 'Bridge Project Staging, Hwy 55 MM 42',
       deliveryCity: 'Horseshoe Bend',
       deliveryState: 'ID',
+      deliveryLat: geo('horseshoe bend').lat,
+      deliveryLng: geo('horseshoe bend').lng,
       materialType: 'steel',
       materialDescription: 'W-beams, 40 ft',
       weightKg: 20000,
@@ -309,9 +356,13 @@ export async function seed(db: Db): Promise<boolean> {
       pickupAddress: 'Batch Plant 2, 660 Mixer Ln',
       pickupCity: 'Caldwell',
       pickupState: 'ID',
+      pickupLat: geo('caldwell').lat,
+      pickupLng: geo('caldwell').lng,
       deliveryAddress: 'Foundation Pour, 15 Orchard St',
       deliveryCity: 'Boise',
       deliveryState: 'ID',
+      deliveryLat: geo('boise').lat,
+      deliveryLng: geo('boise').lng,
       materialType: 'aggregate',
       materialDescription: 'Road base, 1.5" minus',
       weightKg: 16500,
@@ -367,9 +418,13 @@ export async function seed(db: Db): Promise<boolean> {
       pickupAddress: 'Drywall Warehouse, 1200 Panel Pkwy',
       pickupCity: 'Meridian',
       pickupState: 'ID',
+      pickupLat: geo('meridian').lat,
+      pickupLng: geo('meridian').lng,
       deliveryAddress: 'Office Remodel, 400 Main St',
       deliveryCity: 'Boise',
       deliveryState: 'ID',
+      deliveryLat: geo('boise').lat,
+      deliveryLng: geo('boise').lng,
       materialType: 'drywall',
       materialDescription: '5/8" Type X sheets',
       weightKg: 8000,

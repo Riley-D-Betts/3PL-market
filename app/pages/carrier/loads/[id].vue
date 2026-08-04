@@ -17,7 +17,10 @@ const { data: vehicleData } = await useFetch('/api/fleet/vehicles', { server: fa
 // list even when inactive so the select renders a name, not a raw id.
 const driverItems = computed(() => {
   const drivers = driverData.value?.drivers ?? []
-  const items = drivers.filter(d => d.isActive).map(d => ({ label: d.name, value: d.id }))
+  const items = drivers.filter(d => d.isActive).map(d => ({
+    label: d.homeBaseCity ? `${d.name} — ${d.homeBaseCity}` : d.name,
+    value: d.id,
+  }))
   const assigned = drivers.find(d => d.id === load.value?.assignedDriverId)
   if (assigned && !assigned.isActive) {
     items.unshift({ label: `${assigned.name} (inactive)`, value: assigned.id })
@@ -77,6 +80,25 @@ const backOut = () => act(
   () => $fetch(`/api/loads/${route.params.id}/cancel`, { method: 'POST' }),
   'Load cancelled',
 )
+
+const mapPoints = computed(() => {
+  const l = load.value
+  if (!l) return []
+  const points: { kind: 'pickup' | 'delivery' | 'home', lat: number | null, lng: number | null, label: string }[] = [
+    { kind: 'pickup', lat: l.pickupLat, lng: l.pickupLng, label: `Pickup — ${l.pickupCity}, ${l.pickupState}` },
+    { kind: 'delivery', lat: l.deliveryLat, lng: l.deliveryLng, label: `Delivery — ${l.deliveryCity}, ${l.deliveryState}` },
+  ]
+  const d = data.value?.assignedDriver
+  if (d?.homeBaseLat != null && d?.homeBaseLng != null) {
+    points.push({
+      kind: 'home',
+      lat: d.homeBaseLat,
+      lng: d.homeBaseLng,
+      label: `${d.name} — home base ${d.homeBaseCity ?? ''}`,
+    })
+  }
+  return points
+})
 </script>
 
 <template>
@@ -113,6 +135,7 @@ const backOut = () => act(
 
     <UCard>
       <LoadRouteSummary :load="load" />
+      <LoadMap class="mt-4" :points="mapPoints" />
     </UCard>
 
     <div class="grid gap-6 lg:grid-cols-5">
