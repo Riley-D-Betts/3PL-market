@@ -8,7 +8,27 @@ const { data, refresh, error: loadError } = await useFetch(`/api/loads/${route.p
 const load = computed(() => data.value?.load)
 const acting = ref(false)
 
-async function act(path: 'pickup' | 'deliver', success: string) {
+// Live "waiting since" clock for the detention banner.
+const now = ref(Date.now())
+let timer: ReturnType<typeof setInterval> | undefined
+onMounted(() => {
+  timer = setInterval(() => { now.value = Date.now() }, 30_000)
+})
+onUnmounted(() => clearInterval(timer))
+
+function waitingText(arrivedAt: string | Date): string {
+  const minutes = Math.max(0, Math.floor((now.value - new Date(arrivedAt).getTime()) / 60_000))
+  const l = load.value
+  let text = `Waiting ${formatMinutes(minutes)}`
+  if (l?.detentionFreeMinutes != null && l?.detentionRatePerHourCents != null) {
+    text += minutes > l.detentionFreeMinutes
+      ? ` — detention accruing at ${formatCents(l.detentionRatePerHourCents)}/hr`
+      : ` — free time ${formatMinutes(l.detentionFreeMinutes)}, then ${formatCents(l.detentionRatePerHourCents)}/hr`
+  }
+  return text
+}
+
+async function act(path: string, success: string) {
   acting.value = true
   try {
     await $fetch(`/api/driver/loads/${route.params.id}/${path}`, { method: 'POST' })
@@ -43,28 +63,60 @@ async function act(path: 'pickup' | 'deliver', success: string) {
       </div>
     </UCard>
 
+    <!-- Step 1: heading to pickup -->
     <UButton
-      v-if="load.status === 'awarded'"
+      v-if="load.status === 'awarded' && !load.arrivedPickupAt"
       block
       size="xl"
-      color="primary"
-      icon="i-lucide-package-check"
+      icon="i-lucide-map-pin"
       :loading="acting"
-      @click="act('pickup', 'Marked as picked up — safe travels!')"
+      @click="act('arrive-pickup', 'Arrival at pickup logged — the wait clock is running')"
     >
-      Mark picked up
+      Arrived at pickup
     </UButton>
+
+    <!-- Step 2: waiting/loading at pickup -->
+    <template v-else-if="load.status === 'awarded' && load.arrivedPickupAt">
+      <UAlert color="info" variant="subtle" icon="i-lucide-timer" :description="waitingText(load.arrivedPickupAt)" />
+      <UButton
+        block
+        size="xl"
+        color="primary"
+        icon="i-lucide-package-check"
+        :loading="acting"
+        @click="act('pickup', 'Loaded and rolling — safe travels!')"
+      >
+        Loaded — departing pickup
+      </UButton>
+    </template>
+
+    <!-- Step 3: heading to delivery -->
     <UButton
-      v-else-if="load.status === 'picked_up'"
+      v-else-if="load.status === 'picked_up' && !load.arrivedDeliveryAt"
       block
       size="xl"
-      color="success"
-      icon="i-lucide-map-pin-check"
+      icon="i-lucide-flag"
       :loading="acting"
-      @click="act('deliver', 'Marked as delivered — nice work!')"
+      @click="act('arrive-delivery', 'Arrival at delivery logged — the wait clock is running')"
     >
-      Mark delivered
+      Arrived at delivery
     </UButton>
+
+    <!-- Step 4: waiting/unloading at delivery -->
+    <template v-else-if="load.status === 'picked_up' && load.arrivedDeliveryAt">
+      <UAlert color="info" variant="subtle" icon="i-lucide-timer" :description="waitingText(load.arrivedDeliveryAt)" />
+      <UButton
+        block
+        size="xl"
+        color="success"
+        icon="i-lucide-map-pin-check"
+        :loading="acting"
+        @click="act('deliver', 'Marked as delivered — nice work!')"
+      >
+        Unloaded — mark delivered
+      </UButton>
+    </template>
+
     <UAlert
       v-else-if="load.status === 'delivered'"
       color="success"

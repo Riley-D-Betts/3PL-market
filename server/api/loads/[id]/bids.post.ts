@@ -9,6 +9,10 @@ export default defineEventHandler(async (event) => {
     loadId: id,
     amountCents: body.amountCents,
     note: body.note,
+    terms: {
+      detentionFreeMinutes: body.detentionFreeMinutes,
+      detentionRatePerHourCents: body.detentionRatePerHourCents,
+    },
   })
   setResponseStatus(event, 201)
   return { bid }

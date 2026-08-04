@@ -25,6 +25,8 @@ export interface LoadLike {
   status: LoadStatus
   assignedCompanyId: string | null
   assignedDriverId: string | null
+  arrivedPickupAt: Date | null
+  arrivedDeliveryAt: Date | null
 }
 
 export const TRANSITIONS: Record<LoadStatus, Partial<Record<LoadStatus, ActorKind[]>>> = {
@@ -93,8 +95,11 @@ export function actorKinds(actor: ActorLike, load: LoadLike): ActorKind[] {
 export function canTransition(actor: ActorLike, load: LoadLike, to: LoadStatus): boolean {
   const allowedActors = TRANSITIONS[load.status]?.[to]
   if (!allowedActors) return false
-  // Pickup requires a driver to actually be assigned.
-  if (to === 'picked_up' && !load.assignedDriverId) return false
+  // Pickup requires an assigned driver who has logged arrival at the pickup
+  // site; delivery requires logged arrival at the delivery site. The arrival
+  // log doubles as the start of the detention clock.
+  if (to === 'picked_up' && (!load.assignedDriverId || !load.arrivedPickupAt)) return false
+  if (to === 'delivered' && !load.arrivedDeliveryAt) return false
   const kinds = actorKinds(actor, load)
   return allowedActors.some(kind => kinds.includes(kind))
 }

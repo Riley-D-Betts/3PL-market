@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from 'drizzle-orm'
+import { and, asc, desc, eq, sql } from 'drizzle-orm'
 import { createError } from 'h3'
 
 export default defineEventHandler(async (event) => {
@@ -17,10 +17,14 @@ export default defineEventHandler(async (event) => {
   const isAssignedCarrier = isCarrierAdmin && load.assignedCompanyId === company!.id
   const isApprovedCarrier = isCarrierAdmin && company!.status === 'approved'
 
-  // Board browsing (posted loads) requires an approved carrier; an assigned
-  // carrier keeps access to its in-flight loads regardless of company status.
+  // Board browsing (posted loads) requires an approved carrier that the
+  // shipper has not blocked; an assigned carrier keeps access to its
+  // in-flight loads regardless of company status.
+  const blockedForViewer = isCarrierAdmin
+    ? await isCarrierBlocked(db, load.shipperId, company!.id)
+    : false
   const canView = isOwner || isSuperadmin || isAssignedDriver || isAssignedCarrier
-    || (isApprovedCarrier && load.status === 'posted')
+    || (isApprovedCarrier && load.status === 'posted' && !blockedForViewer)
   if (!canView) {
     throw createError({ statusCode: 403, statusMessage: 'You do not have access to this load' })
   }
@@ -62,9 +66,14 @@ export default defineEventHandler(async (event) => {
           return e
         })
 
-  // Full bid list is for the owner (and superadmin) only.
+  // Full bid list is for the owner (and superadmin) only. The blocked flag
+  // lets the UI render Block/Blocked without an extra roundtrip.
   let bidList = null
   if (isOwner || isSuperadmin) {
+    const blocked = sql<boolean>`exists (
+      select 1 from ${shipperCarrierBlocks} scb
+      where scb.shipper_id = ${load.shipperId} and scb.company_id = ${bids.companyId}
+    )`
     bidList = await db.select({
       id: bids.id,
       companyId: bids.companyId,
@@ -72,6 +81,9 @@ export default defineEventHandler(async (event) => {
       amountCents: bids.amountCents,
       note: bids.note,
       status: bids.status,
+      detentionFreeMinutes: bids.detentionFreeMinutes,
+      detentionRatePerHourCents: bids.detentionRatePerHourCents,
+      companyBlocked: blocked,
       createdAt: bids.createdAt,
       updatedAt: bids.updatedAt,
     })
@@ -102,15 +114,26 @@ export default defineEventHandler(async (event) => {
     : null
   const shipper = await db.query.users.findFirst({
     where: eq(users.id, load.shipperId),
-    columns: { id: true, name: true, phone: true },
+    columns: { id: true, name: true, phone: true, email: true, billingEmail: true },
   })
 
+  // On-site contacts belong to the working relationship — never to board
+  // browsers. Same for the invoicing address.
+  const canSeeContacts = isOwner || isSuperadmin || isAssignedCarrier || isAssignedDriver
+  const visibleLoad = canSeeContacts
+    ? load
+    : { ...load, pickupContactName: null, pickupContactPhone: null, deliveryContactName: null, deliveryContactPhone: null }
+  const invoiceEmail = (isOwner || isSuperadmin || isAssignedCarrier)
+    ? (shipper?.billingEmail ?? shipper?.email ?? null)
+    : null
+
   return {
-    load,
+    load: visibleLoad,
     events,
     bids: bidList,
     myBid,
-    shipper,
+    shipper: shipper ? { id: shipper.id, name: shipper.name, phone: shipper.phone } : null,
+    invoiceEmail,
     assignedCompany,
     assignedDriver,
     assignedVehicle,

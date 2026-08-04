@@ -17,7 +17,9 @@ const EVENT_ICONS: Record<string, string> = {
   bid_withdrawn: 'i-lucide-x-circle',
   awarded: 'i-lucide-badge-check',
   driver_assigned: 'i-lucide-user-check',
+  arrived_pickup: 'i-lucide-map-pin',
   picked_up: 'i-lucide-package-check',
+  arrived_delivery: 'i-lucide-flag',
   delivered: 'i-lucide-map-pin-check',
   completed: 'i-lucide-check-circle-2',
   cancelled: 'i-lucide-ban',
@@ -27,8 +29,12 @@ const EVENT_ICONS: Record<string, string> = {
 function detail(event: TimelineEvent): string | null {
   const p = event.payload
   if (!p) return null
-  if (typeof p.amountCents === 'number') return formatCents(p.amountCents)
-  return null
+  const parts: string[] = []
+  if (typeof p.amountCents === 'number') parts.push(formatCents(p.amountCents))
+  if (typeof p.detentionCents === 'number' && p.detentionCents > 0) {
+    parts.push(`detention ${formatCents(p.detentionCents as number)}`)
+  }
+  return parts.length ? parts.join(' · ') : null
 }
 </script>
 

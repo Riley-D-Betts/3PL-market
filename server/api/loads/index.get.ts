@@ -4,7 +4,9 @@ export default defineEventHandler(async (event) => {
   const { user } = await requireAuth(event, ['shipper'])
   const query = await getValidatedQuery(event, loadsQuerySchema.parse)
 
-  const pendingBidCount = sql<number>`(select count(*)::int from ${bids} where ${bids.loadId} = ${loads.id} and ${bids.status} = 'pending')`
+  // Raw qualified names: drizzle strips table qualification from interpolated
+  // columns in join-less selects, which breaks correlated subqueries.
+  const pendingBidCount = sql<number>`(select count(*)::int from bids b where b.load_id = loads.id and b.status = 'pending')`
 
   const rows = await db.select({ ...getTableColumns(loads), pendingBidCount })
     .from(loads)

@@ -12,6 +12,7 @@ import type { Company, Load, User } from '../../server/database/schema'
 import { awardBid, instantAccept, performTransition, placeBid, withdrawBid } from '../../server/utils/load-actions'
 
 const run = randomUUID().slice(0, 8)
+const TERMS = { detentionFreeMinutes: 120, detentionRatePerHourCents: 7500 }
 
 let shipper: User
 let carrierA: { company: Company, admin: User }
@@ -88,8 +89,8 @@ describe('instant accept', () => {
     const load = await makePostedLoad()
 
     const results = await Promise.allSettled([
-      instantAccept({ user: carrierA.admin, company: carrierA.company, loadId: load.id }),
-      instantAccept({ user: carrierB.admin, company: carrierB.company, loadId: load.id }),
+      instantAccept({ user: carrierA.admin, company: carrierA.company, loadId: load.id, terms: TERMS }),
+      instantAccept({ user: carrierB.admin, company: carrierB.company, loadId: load.id, terms: TERMS }),
     ])
 
     const wins = results.filter(r => r.status === 'fulfilled')
@@ -109,9 +110,9 @@ describe('instant accept', () => {
 
   it('rejects pending counter-bids from other companies on accept', async () => {
     const load = await makePostedLoad()
-    const counter = await placeBid({ user: carrierB.admin, company: carrierB.company, loadId: load.id, amountCents: 90000 })
+    const counter = await placeBid({ user: carrierB.admin, company: carrierB.company, loadId: load.id, amountCents: 90000, terms: TERMS })
 
-    await instantAccept({ user: carrierA.admin, company: carrierA.company, loadId: load.id })
+    await instantAccept({ user: carrierA.admin, company: carrierA.company, loadId: load.id, terms: TERMS })
 
     const bBid = await db.query.bids.findFirst({ where: eq(bids.id, counter.id) })
     expect(bBid!.status).toBe('rejected')
@@ -121,8 +122,8 @@ describe('instant accept', () => {
 describe('award', () => {
   it('awards the chosen bid, rejects the rest, assigns the company and price', async () => {
     const load = await makePostedLoad()
-    const bidA = await placeBid({ user: carrierA.admin, company: carrierA.company, loadId: load.id, amountCents: 88000 })
-    const bidB = await placeBid({ user: carrierB.admin, company: carrierB.company, loadId: load.id, amountCents: 92000 })
+    const bidA = await placeBid({ user: carrierA.admin, company: carrierA.company, loadId: load.id, amountCents: 88000, terms: TERMS })
+    const bidB = await placeBid({ user: carrierB.admin, company: carrierB.company, loadId: load.id, amountCents: 92000, terms: TERMS })
 
     const awarded = await awardBid({ shipper, loadId: load.id, bidId: bidA.id })
     expect(awarded.status).toBe('awarded')
@@ -138,8 +139,8 @@ describe('award', () => {
 
   it('re-bidding replaces the company bid in place (upsert)', async () => {
     const load = await makePostedLoad()
-    const first = await placeBid({ user: carrierA.admin, company: carrierA.company, loadId: load.id, amountCents: 80000 })
-    const second = await placeBid({ user: carrierA.admin, company: carrierA.company, loadId: load.id, amountCents: 75000, note: 'sharper' })
+    const first = await placeBid({ user: carrierA.admin, company: carrierA.company, loadId: load.id, amountCents: 80000, terms: TERMS })
+    const second = await placeBid({ user: carrierA.admin, company: carrierA.company, loadId: load.id, amountCents: 75000, note: 'sharper', terms: TERMS })
 
     expect(second.id).toBe(first.id)
     const rows = await db.query.bids.findMany({ where: eq(bids.loadId, load.id) })
@@ -149,13 +150,13 @@ describe('award', () => {
 
   it('cannot award a withdrawn bid, cannot withdraw an accepted bid', async () => {
     const load = await makePostedLoad()
-    const bidA = await placeBid({ user: carrierA.admin, company: carrierA.company, loadId: load.id, amountCents: 85000 })
+    const bidA = await placeBid({ user: carrierA.admin, company: carrierA.company, loadId: load.id, amountCents: 85000, terms: TERMS })
     await withdrawBid({ user: carrierA.admin, company: carrierA.company, bidId: bidA.id })
 
     await expect(awardBid({ shipper, loadId: load.id, bidId: bidA.id }))
       .rejects.toMatchObject({ statusCode: 409 })
 
-    const bidB = await placeBid({ user: carrierB.admin, company: carrierB.company, loadId: load.id, amountCents: 87000 })
+    const bidB = await placeBid({ user: carrierB.admin, company: carrierB.company, loadId: load.id, amountCents: 87000, terms: TERMS })
     await awardBid({ shipper, loadId: load.id, bidId: bidB.id })
     await expect(withdrawBid({ user: carrierB.admin, company: carrierB.company, bidId: bidB.id }))
       .rejects.toMatchObject({ statusCode: 409 })
@@ -163,7 +164,7 @@ describe('award', () => {
 
   it('a non-owner cannot award', async () => {
     const load = await makePostedLoad()
-    const bidA = await placeBid({ user: carrierA.admin, company: carrierA.company, loadId: load.id, amountCents: 85000 })
+    const bidA = await placeBid({ user: carrierA.admin, company: carrierA.company, loadId: load.id, amountCents: 85000, terms: TERMS })
     await expect(awardBid({ shipper: carrierA.admin, loadId: load.id, bidId: bidA.id }))
       .rejects.toMatchObject({ statusCode: 403 })
   })
@@ -172,7 +173,7 @@ describe('award', () => {
 describe('transitions with pending bids', () => {
   it('cancelling a posted load rejects its pending bids', async () => {
     const load = await makePostedLoad()
-    const bidA = await placeBid({ user: carrierA.admin, company: carrierA.company, loadId: load.id, amountCents: 82000 })
+    const bidA = await placeBid({ user: carrierA.admin, company: carrierA.company, loadId: load.id, amountCents: 82000, terms: TERMS })
 
     const cancelled = await performTransition({ actor: shipper, loadId: load.id, to: 'cancelled', rejectPendingBids: true })
     expect(cancelled.status).toBe('cancelled')
@@ -184,13 +185,13 @@ describe('transitions with pending bids', () => {
   it('bidding on a cancelled load is refused', async () => {
     const load = await makePostedLoad()
     await performTransition({ actor: shipper, loadId: load.id, to: 'cancelled' })
-    await expect(placeBid({ user: carrierA.admin, company: carrierA.company, loadId: load.id, amountCents: 50000 }))
+    await expect(placeBid({ user: carrierA.admin, company: carrierA.company, loadId: load.id, amountCents: 50000, terms: TERMS }))
       .rejects.toMatchObject({ statusCode: 409 })
   })
 
   it('records an event per transition', async () => {
     const load = await makePostedLoad()
-    await instantAccept({ user: carrierA.admin, company: carrierA.company, loadId: load.id })
+    await instantAccept({ user: carrierA.admin, company: carrierA.company, loadId: load.id, terms: TERMS })
     const events = await db.query.loadEvents.findMany({ where: eq(loadEvents.loadId, load.id) })
     expect(events.map(e => e.eventType)).toContain('awarded')
   })

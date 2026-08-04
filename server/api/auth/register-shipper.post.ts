@@ -9,6 +9,7 @@ export default defineEventHandler(async (event) => {
       name: body.name,
       phone: body.phone ?? null,
       role: 'shipper',
+      billingEmail: body.billingEmail ?? null,
     }).returning()
 
     await setUserSession(event, { user: toSessionUser(user!) })

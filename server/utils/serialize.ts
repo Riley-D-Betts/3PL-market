@@ -9,6 +9,7 @@ export interface PublicUser {
   role: User['role']
   companyId: string | null
   isActive: boolean
+  billingEmail: string | null
   createdAt: Date
 }
 
@@ -21,6 +22,7 @@ export function toPublicUser(user: User): PublicUser {
     role: user.role,
     companyId: user.companyId,
     isActive: user.isActive,
+    billingEmail: user.billingEmail,
     createdAt: user.createdAt,
   }
 }

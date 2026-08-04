@@ -28,6 +28,7 @@ export function useAuthz() {
         return [
           { label: 'My loads', to: '/shipper', icon: 'i-lucide-package' },
           { label: 'Post a load', to: '/shipper/loads/new', icon: 'i-lucide-plus-circle' },
+          { label: 'Settings', to: '/shipper/settings', icon: 'i-lucide-settings' },
         ]
       case 'carrier_admin':
         return [

@@ -1,6 +1,6 @@
 import { eq, sql } from 'drizzle-orm'
 import type { Db } from './client'
-import { bids, companies, loadEvents, loads, users, vehicles } from './schema'
+import { bids, companies, loadEvents, loads, shipperCarrierBlocks, users, vehicles } from './schema'
 import { hashUserPassword } from '../utils/password'
 
 export const SUPERADMIN_EMAIL = 'admin@3plmarket.test'
@@ -34,6 +34,7 @@ export async function seed(db: Db): Promise<boolean> {
       name: 'Boise Builders Supply',
       phone: '+1 208 555 0101',
       role: 'shipper',
+      billingEmail: 'ap@boisebuilders.test',
     }).returning()
 
     const [granite] = await tx.insert(companies).values({
@@ -110,6 +111,41 @@ export async function seed(db: Db): Promise<boolean> {
       companyId: pendingCo!.id,
     })
 
+    // Second approved carrier — competes on bids with different detention terms.
+    const [swift] = await tx.insert(companies).values({
+      name: 'Swift Aggregate Logistics',
+      contactEmail: 'ops@swiftaggregate.test',
+      contactPhone: '+1 208 555 0190',
+      mcNumber: 'MC-771204',
+      status: 'approved',
+    }).returning()
+    const [swiftAdmin] = await tx.insert(users).values({
+      email: 'carrier2@demo.test',
+      passwordHash,
+      name: 'Sam Swift',
+      role: 'carrier_admin',
+      companyId: swift!.id,
+    }).returning()
+
+    // Approved carrier the demo shipper has blocked.
+    const [rusty] = await tx.insert(companies).values({
+      name: 'Rusty Wagon Freight',
+      contactEmail: 'dispatch@rustywagon.test',
+      status: 'approved',
+    }).returning()
+    const [rustyAdmin] = await tx.insert(users).values({
+      email: 'blocked-carrier@demo.test',
+      passwordHash,
+      name: 'Rex Wagoner',
+      role: 'carrier_admin',
+      companyId: rusty!.id,
+    }).returning()
+    await tx.insert(shipperCarrierBlocks).values({
+      shipperId: shipper!.id,
+      companyId: rusty!.id,
+      reason: 'Damaged a load of drywall in June',
+    })
+
     const shipperId = shipper!.id
     const graniteId = granite!.id
 
@@ -178,6 +214,10 @@ export async function seed(db: Db): Promise<boolean> {
       pickupWindowStart: hours(36),
       pickupWindowEnd: hours(60),
       askingPriceCents: 120000,
+      pickupContactName: 'Mill office — Manny',
+      pickupContactPhone: '+1 208 555 0201',
+      deliveryContactName: 'Site super — Kara',
+      deliveryContactPhone: '+1 208 555 0202',
       status: 'posted',
       postedAt: hours(-20),
     }).returning()
@@ -189,10 +229,29 @@ export async function seed(db: Db): Promise<boolean> {
       note: 'Long deadhead back from Twin Falls — can do it for $1,325.',
       status: 'pending',
     }).returning()
+    const [swiftBid] = await tx.insert(bids).values({
+      loadId: biddedLoad!.id,
+      companyId: swift!.id,
+      createdBy: swiftAdmin!.id,
+      amountCents: 128000,
+      note: 'Curtain-side available, tight terms.',
+      status: 'pending',
+      detentionFreeMinutes: 60,
+      detentionRatePerHourCents: 9500,
+    }).returning()
+    const [rustyBid] = await tx.insert(bids).values({
+      loadId: biddedLoad!.id,
+      companyId: rusty!.id,
+      createdBy: rustyAdmin!.id,
+      amountCents: 110000,
+      status: 'rejected', // auto-rejected when the shipper blocked Rusty Wagon
+    }).returning()
     await tx.insert(loadEvents).values([
       { loadId: biddedLoad!.id, actorUserId: shipperId, eventType: 'created', toStatus: 'draft', createdAt: hours(-21) },
       { loadId: biddedLoad!.id, actorUserId: shipperId, eventType: 'posted', fromStatus: 'draft', toStatus: 'posted', createdAt: hours(-20) },
-      { loadId: biddedLoad!.id, actorUserId: carrierAdmin!.id, eventType: 'bid_placed', payload: { bidId: counterBid!.id, companyId: graniteId, amountCents: 132500 }, createdAt: hours(-6) },
+      { loadId: biddedLoad!.id, actorUserId: rustyAdmin!.id, eventType: 'bid_placed', payload: { bidId: rustyBid!.id, companyId: rusty!.id, amountCents: 110000, detentionFreeMinutes: 120, detentionRatePerHourCents: 7500 }, createdAt: hours(-9) },
+      { loadId: biddedLoad!.id, actorUserId: carrierAdmin!.id, eventType: 'bid_placed', payload: { bidId: counterBid!.id, companyId: graniteId, amountCents: 132500, detentionFreeMinutes: 120, detentionRatePerHourCents: 7500 }, createdAt: hours(-6) },
+      { loadId: biddedLoad!.id, actorUserId: swiftAdmin!.id, eventType: 'bid_placed', payload: { bidId: swiftBid!.id, companyId: swift!.id, amountCents: 128000, detentionFreeMinutes: 60, detentionRatePerHourCents: 9500 }, createdAt: hours(-4) },
     ])
 
     // 4. Awarded load, driver1 + flatbed assigned
@@ -212,6 +271,12 @@ export async function seed(db: Db): Promise<boolean> {
       pickupWindowEnd: hours(30),
       askingPriceCents: 160000,
       finalPriceCents: 150000,
+      pickupContactName: 'Depot gate — Ollie',
+      pickupContactPhone: '+1 208 555 0203',
+      deliveryContactName: 'Bridge crew lead — Dana',
+      deliveryContactPhone: '+1 208 555 0204',
+      detentionFreeMinutes: 120,
+      detentionRatePerHourCents: 7500,
       status: 'awarded',
       assignedCompanyId: graniteId,
       assignedDriverId: driver1!.id,
@@ -226,6 +291,8 @@ export async function seed(db: Db): Promise<boolean> {
       amountCents: 150000,
       note: 'Flatbed with beam racks available.',
       status: 'accepted',
+      detentionFreeMinutes: 120,
+      detentionRatePerHourCents: 7500,
     }).returning()
     await tx.update(loads).set({ awardedBidId: awardedBid!.id }).where(eq(loads.id, awardedLoad!.id))
     await tx.insert(loadEvents).values([
@@ -253,6 +320,18 @@ export async function seed(db: Db): Promise<boolean> {
       pickupWindowEnd: hours(2),
       askingPriceCents: 68000,
       finalPriceCents: 68000,
+      pickupContactName: 'Plant scale house',
+      pickupContactPhone: '+1 208 555 0205',
+      deliveryContactName: 'Pour foreman — Gus',
+      deliveryContactPhone: '+1 208 555 0206',
+      // Tight terms: 30 min free at $80/hr. Pickup wait stayed inside free
+      // time (0 frozen); the truck has been waiting at delivery ~72 min, so
+      // delivery detention is live-accruing in the UI right now.
+      detentionFreeMinutes: 30,
+      detentionRatePerHourCents: 8000,
+      arrivedPickupAt: hours(-3.5),
+      pickupDetentionCents: 0,
+      arrivedDeliveryAt: hours(-1.2),
       status: 'picked_up',
       assignedCompanyId: graniteId,
       assignedDriverId: driver2!.id,
@@ -268,14 +347,18 @@ export async function seed(db: Db): Promise<boolean> {
       amountCents: 68000,
       note: 'Instant accept at asking price',
       status: 'accepted',
+      detentionFreeMinutes: 30,
+      detentionRatePerHourCents: 8000,
     }).returning()
     await tx.update(loads).set({ awardedBidId: acceptBid!.id }).where(eq(loads.id, pickedUpLoad!.id))
     await tx.insert(loadEvents).values([
       { loadId: pickedUpLoad!.id, actorUserId: shipperId, eventType: 'created', toStatus: 'draft', createdAt: hours(-31) },
       { loadId: pickedUpLoad!.id, actorUserId: shipperId, eventType: 'posted', fromStatus: 'draft', toStatus: 'posted', createdAt: hours(-30) },
-      { loadId: pickedUpLoad!.id, actorUserId: carrierAdmin!.id, eventType: 'awarded', fromStatus: 'posted', toStatus: 'awarded', payload: { instantAccept: true, companyId: graniteId, amountCents: 68000 }, createdAt: hours(-26) },
+      { loadId: pickedUpLoad!.id, actorUserId: carrierAdmin!.id, eventType: 'awarded', fromStatus: 'posted', toStatus: 'awarded', payload: { instantAccept: true, companyId: graniteId, amountCents: 68000, detentionFreeMinutes: 30, detentionRatePerHourCents: 8000 }, createdAt: hours(-26) },
       { loadId: pickedUpLoad!.id, actorUserId: carrierAdmin!.id, eventType: 'driver_assigned', payload: { driverId: driver2!.id, vehicleId: dumpTruck!.id }, createdAt: hours(-25) },
-      { loadId: pickedUpLoad!.id, actorUserId: driver2!.id, eventType: 'picked_up', fromStatus: 'awarded', toStatus: 'picked_up', createdAt: hours(-3) },
+      { loadId: pickedUpLoad!.id, actorUserId: driver2!.id, eventType: 'arrived_pickup', createdAt: hours(-3.5) },
+      { loadId: pickedUpLoad!.id, actorUserId: driver2!.id, eventType: 'picked_up', fromStatus: 'awarded', toStatus: 'picked_up', payload: { detentionMinutes: 0, detentionCents: 0 }, createdAt: hours(-3) },
+      { loadId: pickedUpLoad!.id, actorUserId: driver2!.id, eventType: 'arrived_delivery', createdAt: hours(-1.2) },
     ])
 
     // 6. Delivered load awaiting shipper confirmation
@@ -295,6 +378,18 @@ export async function seed(db: Db): Promise<boolean> {
       pickupWindowEnd: hours(-40),
       askingPriceCents: 38000,
       finalPriceCents: 36000,
+      pickupContactName: 'Warehouse dock 3',
+      pickupContactPhone: '+1 208 555 0207',
+      deliveryContactName: 'GC office — Priya',
+      deliveryContactPhone: '+1 208 555 0208',
+      // Truck waited 190 min at pickup against 120 free → 70 min over at
+      // $75/hr = $87.50 frozen. Delivery unload took 25 min → 0.
+      detentionFreeMinutes: 120,
+      detentionRatePerHourCents: 7500,
+      arrivedPickupAt: hours(-46 - 190 / 60),
+      pickupDetentionCents: 8750,
+      arrivedDeliveryAt: hours(-42 - 25 / 60),
+      deliveryDetentionCents: 0,
       status: 'delivered',
       assignedCompanyId: graniteId,
       assignedDriverId: driver1!.id,
@@ -309,16 +404,20 @@ export async function seed(db: Db): Promise<boolean> {
       createdBy: carrierAdmin!.id,
       amountCents: 36000,
       status: 'accepted',
+      detentionFreeMinutes: 120,
+      detentionRatePerHourCents: 7500,
     }).returning()
     await tx.update(loads).set({ awardedBidId: deliveredBid!.id }).where(eq(loads.id, deliveredLoad!.id))
     await tx.insert(loadEvents).values([
       { loadId: deliveredLoad!.id, actorUserId: shipperId, eventType: 'created', toStatus: 'draft', createdAt: hours(-81) },
       { loadId: deliveredLoad!.id, actorUserId: shipperId, eventType: 'posted', fromStatus: 'draft', toStatus: 'posted', createdAt: hours(-80) },
-      { loadId: deliveredLoad!.id, actorUserId: carrierAdmin!.id, eventType: 'bid_placed', payload: { bidId: deliveredBid!.id, companyId: graniteId, amountCents: 36000 }, createdAt: hours(-72) },
-      { loadId: deliveredLoad!.id, actorUserId: shipperId, eventType: 'awarded', fromStatus: 'posted', toStatus: 'awarded', payload: { bidId: deliveredBid!.id, companyId: graniteId, amountCents: 36000 }, createdAt: hours(-70) },
+      { loadId: deliveredLoad!.id, actorUserId: carrierAdmin!.id, eventType: 'bid_placed', payload: { bidId: deliveredBid!.id, companyId: graniteId, amountCents: 36000, detentionFreeMinutes: 120, detentionRatePerHourCents: 7500 }, createdAt: hours(-72) },
+      { loadId: deliveredLoad!.id, actorUserId: shipperId, eventType: 'awarded', fromStatus: 'posted', toStatus: 'awarded', payload: { bidId: deliveredBid!.id, companyId: graniteId, amountCents: 36000, detentionFreeMinutes: 120, detentionRatePerHourCents: 7500 }, createdAt: hours(-70) },
       { loadId: deliveredLoad!.id, actorUserId: carrierAdmin!.id, eventType: 'driver_assigned', payload: { driverId: driver1!.id }, createdAt: hours(-60) },
-      { loadId: deliveredLoad!.id, actorUserId: driver1!.id, eventType: 'picked_up', fromStatus: 'awarded', toStatus: 'picked_up', createdAt: hours(-46) },
-      { loadId: deliveredLoad!.id, actorUserId: driver1!.id, eventType: 'delivered', fromStatus: 'picked_up', toStatus: 'delivered', createdAt: hours(-42) },
+      { loadId: deliveredLoad!.id, actorUserId: driver1!.id, eventType: 'arrived_pickup', createdAt: hours(-46 - 190 / 60) },
+      { loadId: deliveredLoad!.id, actorUserId: driver1!.id, eventType: 'picked_up', fromStatus: 'awarded', toStatus: 'picked_up', payload: { detentionMinutes: 70, detentionCents: 8750 }, createdAt: hours(-46) },
+      { loadId: deliveredLoad!.id, actorUserId: driver1!.id, eventType: 'arrived_delivery', createdAt: hours(-42 - 25 / 60) },
+      { loadId: deliveredLoad!.id, actorUserId: driver1!.id, eventType: 'delivered', fromStatus: 'picked_up', toStatus: 'delivered', payload: { detentionMinutes: 0, detentionCents: 0 }, createdAt: hours(-42) },
     ])
   })
 
