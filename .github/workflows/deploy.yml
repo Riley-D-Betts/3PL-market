@@ -1,0 +1,80 @@
+name: Deploy
+
+# Deploys to the self-hosted runner in Proxmox CT 114 (10.10.0.37). GitHub-hosted
+# runners cannot reach the 10.10.0.0/24 LAN, so self-hosted is the only option.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-3pl-market
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, 3pl-market]
+    timeout-minutes: 25
+
+    steps:
+      # Deliberately not actions/checkout: the deploy target is the long-lived
+      # working tree at /opt/3pl-market (which holds the untracked .env and
+      # docker-compose.override.yml), not a fresh checkout under _work.
+      - name: Sync working tree
+        run: |
+          set -euo pipefail
+          cd /opt/3pl-market
+          git fetch --prune origin
+          git reset --hard "origin/${GITHUB_REF_NAME}"
+          git log --oneline -1
+
+      - name: Build and restart
+        run: |
+          set -euo pipefail
+          cd /opt/3pl-market
+          export GIT_COMMIT="$(git rev-parse --short HEAD)"
+          export BUILT_AT="$(date -Iseconds)"
+          docker compose up -d --build
+
+      - name: Verify the deploy actually took
+        run: |
+          set -euo pipefail
+          cd /opt/3pl-market
+          EXPECTED="$(git rev-parse --short HEAD)"
+
+          for i in $(seq 1 30); do
+            BODY="$(curl -fsS -m 5 http://127.0.0.1:3000/api/health || true)"
+            case "$BODY" in
+              *'"ok":true'*) break ;;
+            esac
+            sleep 5
+          done
+
+          echo "health: $BODY"
+          case "$BODY" in
+            *'"ok":true'*) ;;
+            *) echo "::error::app did not come up healthy"; exit 1 ;;
+          esac
+
+          # A healthy container is NOT proof of a rebuild — on betts-board a clean
+          # pull plus a healthy container served a 2-day-old image. Compare the
+          # commit the app reports against the commit we just checked out.
+          ACTUAL="$(printf '%s' "$BODY" | sed -n 's/.*"commit":"\([^"]*\)".*/\1/p')"
+          if [ -z "$ACTUAL" ]; then
+            echo "::error::/api/health reports no commit; cannot prove the rebuild took."
+            exit 1
+          fi
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "::error::stale image: serving $ACTUAL, expected $EXPECTED"
+            exit 1
+          fi
+          echo "verified: serving $ACTUAL"
+
+      # Buildkit cache is the main disk consumer here and reached 5.8 GB after two
+      # builds on CT 108, where a tight disk hung the build for 27 hours.
+      - name: Reclaim build cache
+        if: always()
+        run: |
+          docker builder prune -f --max-used-space 2GB
+          df -h / | tail -1

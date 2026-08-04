@@ -13,9 +13,18 @@ RUN pnpm install --frozen-lockfile --offline
 RUN pnpm build
 
 FROM node:22-alpine AS runtime
+
+# Stamped into /api/health so a deploy can prove the running container is the
+# one it just built. `.git` is excluded from the build context, so these have to
+# arrive as build args rather than being read from the tree.
+ARG GIT_COMMIT=unknown
+ARG BUILT_AT=unknown
+
 ENV NODE_ENV=production \
     PORT=3000 \
-    NUXT_MIGRATIONS_DIR=/app/migrations
+    NUXT_MIGRATIONS_DIR=/app/migrations \
+    NUXT_GIT_COMMIT=$GIT_COMMIT \
+    NUXT_BUILT_AT=$BUILT_AT
 WORKDIR /app
 
 COPY --from=build --chown=node:node /app/.output ./.output
