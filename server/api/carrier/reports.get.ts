@@ -17,7 +17,7 @@ export default defineEventHandler(async (event) => {
   const metrics = {
     totalLoads: sql<number>`count(*)::int`,
     completedLoads: sql<number>`count(case when ${delivered} then 1 end)::int`,
-    weightKg: sql<number>`coalesce(sum(${loads.weightKg}), 0)::int`,
+    weightLbs: sql<number>`coalesce(sum(${loads.weightLbs}), 0)::int`,
     revenueCents: sql<number>`coalesce(sum(case when ${delivered} then coalesce(${loads.finalPriceCents}, 0) + coalesce(${loads.pickupDetentionCents}, 0) + coalesce(${loads.deliveryDetentionCents}, 0) end), 0)::bigint`,
     detentionCents: sql<number>`coalesce(sum(case when ${delivered} then coalesce(${loads.pickupDetentionCents}, 0) + coalesce(${loads.deliveryDetentionCents}, 0) end), 0)::bigint`,
   }

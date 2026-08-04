@@ -47,7 +47,7 @@ export default defineEventHandler(async (event) => {
       ),
       query.materialType ? eq(loads.materialType, query.materialType) : undefined,
       query.pickupState ? ilike(loads.pickupState, escapeLike(query.pickupState)) : undefined,
-      query.maxWeightKg ? lte(loads.weightKg, query.maxWeightKg) : undefined,
+      query.maxWeightLbs ? lte(loads.weightLbs, query.maxWeightLbs) : undefined,
       query.q
         ? or(
             ilike(loads.pickupCity, `%${escapeLike(query.q)}%`),

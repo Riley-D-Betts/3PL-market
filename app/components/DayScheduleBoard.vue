@@ -12,7 +12,7 @@ interface BoardLoad {
   assignedDriverId: string | null
   driverName?: string | null
   vehiclePlate?: string | null
-  weightKg: number
+  weightLbs: number
 }
 
 interface BoardDriver {

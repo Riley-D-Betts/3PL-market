@@ -18,24 +18,33 @@ export default defineEventHandler(async (event) => {
     const start = body.pickupWindowStart ?? load.pickupWindowStart
     const end = body.pickupWindowEnd ?? load.pickupWindowEnd
     if (start > end) {
-      throw createError({ statusCode: 400, statusMessage: 'Pickup window start must be before its end' })
+      throw createError({ statusCode: 400, statusMessage: 'First load time must be before the last load time' })
     }
 
-    // Re-geocode a stop when its city/state changed.
+    // Re-derive a stop's coordinates when it moved (address, city or state
+    // changed) and the body carries no fresh pin — stored coordinates can be
+    // an address-precise dropped pin, which must not survive an address edit.
     const geo: Partial<typeof loads.$inferInsert> = {}
-    if ((body.pickupCity && body.pickupCity !== load.pickupCity) || (body.pickupState && body.pickupState !== load.pickupState)) {
+    const pickupMoved = (body.pickupAddress && body.pickupAddress !== load.pickupAddress)
+      || (body.pickupCity && body.pickupCity !== load.pickupCity)
+      || (body.pickupState && body.pickupState !== load.pickupState)
+    if (pickupMoved && (body.pickupLat == null || body.pickupLng == null)) {
       const point = await geocodeCityState(body.pickupCity ?? load.pickupCity, body.pickupState ?? load.pickupState)
       geo.pickupLat = point?.lat ?? null
       geo.pickupLng = point?.lng ?? null
     }
-    if ((body.deliveryCity && body.deliveryCity !== load.deliveryCity) || (body.deliveryState && body.deliveryState !== load.deliveryState)) {
+    const deliveryMoved = (body.deliveryAddress && body.deliveryAddress !== load.deliveryAddress)
+      || (body.deliveryCity && body.deliveryCity !== load.deliveryCity)
+      || (body.deliveryState && body.deliveryState !== load.deliveryState)
+    if (deliveryMoved && (body.deliveryLat == null || body.deliveryLng == null)) {
       const point = await geocodeCityState(body.deliveryCity ?? load.deliveryCity, body.deliveryState ?? load.deliveryState)
       geo.deliveryLat = point?.lat ?? null
       geo.deliveryLng = point?.lng ?? null
     }
 
+    // Explicit pin coordinates in the body win over the re-geocode.
     const [row] = await tx.update(loads)
-      .set({ ...body, ...geo, updatedAt: new Date() })
+      .set({ ...geo, ...body, updatedAt: new Date() })
       .where(and(eq(loads.id, id), eq(loads.status, 'draft')))
       .returning()
     return row!

@@ -84,11 +84,20 @@ The driver's flow is **arrive → load → depart** at each stop: "Arrived at pi
 ### Fleet ops
 
 - **Load numbers**: every load gets a short reference (`L-1042`) shown to shippers, carriers, drivers and admins across lists, details and the day board.
-- **External loads**: carriers can enter freight booked outside the marketplace ("Add external load") — free-text customer, agreed price, optional immediate dispatch. It gets a load number and flows through the calendar, day board, driver arrive/pickup/deliver flow and reports exactly like a won load, but never appears on the board; the carrier admin confirms completion. This lets a 3PL run its whole operation here before the shipper side fills in.
-- **Insurance & maintenance**: vehicles track policy number, insurance expiry, next service due and odometer (km) with expiring/overdue badges on the fleet page, plus a per-vehicle maintenance log (date, work, cost, odometer).
-- **Units**: all measures are metric — weights in kg (displayed in tonnes), distances and odometers in km.
+- **External loads**: carriers can enter freight booked outside the marketplace ("Add external load") — free-text customer, an *optional* agreed price (internal work needs no rate), optional immediate dispatch. It gets a load number and flows through the calendar, day board, driver arrive/pickup/deliver flow and reports exactly like a won load, but never appears on the board; the carrier admin confirms completion. This lets a 3PL run its whole operation here before the shipper side fills in.
+- **Insurance & maintenance**: vehicles track policy number, insurance expiry, next service due and odometer (mi) with expiring/overdue badges on the fleet page, plus a per-vehicle maintenance log (date, work, cost, odometer).
+- **Units**: all measures are imperial — weights in lbs (displayed in short tons), distances and odometers in miles.
 - **Maps**: every load detail page shows a Leaflet/OpenStreetMap route map with pickup and delivery pins; the carrier dispatch view also pins the assigned driver's **home base** (set per driver in the Drivers page) to help pick who's closest.
 - Coordinates come from best-effort **Nominatim geocoding** at load/driver save time, cached city-level in the database (the demo seed prefills real Idaho coordinates, so maps work offline). Missing coordinates degrade gracefully — the map simply doesn't render.
+
+### Posting a load, the jobsite way
+
+- **Location name & job name**: the pickup spot ("Pit 4 — Locust Grove yard") and the destination project ("Costco site — Meridian") get names alongside their street addresses; the job name headlines lists and detail pages.
+- **Notes / instructions**: a free-form field for gates, tarps, scale tickets and site rules, shown to carriers on the board and front-and-center for the driver.
+- **Google pins**: drag a Google Maps pin (or paste its share link, a `geo:` URI, or raw `lat, lng`) into either address field — the exact coordinates are captured, win over city-level geocoding, and drive the route map.
+- **Trucks requested**: a load is one truckload; asking for N trucks posts N sibling loads (badged "Truck 2/5") that carriers accept or bid on individually — same for carrier-entered external work, where the picked driver takes truck 1 and the rest land in the day board's Unassigned lane.
+- **First / last load time**: the pickup window is phrased the way dirt jobs run — first truck loads at, last truck loads by.
+- **Travel time allowance**: an optional paid-travel-time figure both parties see with the rate.
 
 ### Blacklist, contacts & invoicing
 

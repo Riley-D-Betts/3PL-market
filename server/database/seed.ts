@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { eq, sql } from 'drizzle-orm'
 import type { Db } from './client'
 import { bids, companies, geocodeCache, loadEvents, loads, shipperCarrierBlocks, users, vehicleMaintenanceLogs, vehicles } from './schema'
@@ -98,35 +99,35 @@ export async function seed(db: Db): Promise<boolean> {
       companyId: granite!.id,
       type: 'flatbed',
       plate: 'ID-FLT-101',
-      capacityKg: 22000,
+      capacityLbs: 48000,
       insurancePolicy: 'GH-INS-77812',
       insuranceExpiresAt: hours(200 * 24),
       nextServiceDueAt: hours(20 * 24), // "20d left" warning badge
-      odometerKm: 145200,
+      odometerMi: 90200,
     }).returning()
 
     const [dumpTruck] = await tx.insert(vehicles).values({
       companyId: granite!.id,
       type: 'dump_truck',
       plate: 'ID-DMP-202',
-      capacityKg: 18000,
+      capacityLbs: 40000,
       insurancePolicy: 'GH-INS-77813',
       insuranceExpiresAt: hours(18 * 24), // expiring-soon warning badge
       nextServiceDueAt: hours(120 * 24),
-      odometerKm: 182400,
+      odometerMi: 113300,
     }).returning()
 
     await tx.insert(vehicles).values({
       companyId: granite!.id,
       type: 'lowboy',
       plate: 'ID-LOW-303',
-      capacityKg: 35000,
+      capacityLbs: 77000,
       status: 'maintenance',
       notes: 'Brake service until Friday',
       insurancePolicy: 'GH-INS-77814',
       insuranceExpiresAt: hours(300 * 24),
       nextServiceDueAt: hours(-5 * 24), // overdue badge
-      odometerKm: 98100,
+      odometerMi: 61000,
     })
 
     await tx.insert(vehicleMaintenanceLogs).values({
@@ -134,7 +135,7 @@ export async function seed(db: Db): Promise<boolean> {
       performedAt: hours(-40 * 24),
       description: 'Oil change + air filter',
       costCents: 42000,
-      odometerKm: 178900,
+      odometerMi: 111200,
     })
 
     const [pendingCo] = await tx.insert(companies).values({
@@ -215,8 +216,8 @@ export async function seed(db: Db): Promise<boolean> {
       deliveryLng: geo('meridian').lng,
       materialType: 'sand',
       materialDescription: 'Washed masonry sand',
-      weightKg: 9000,
-      quantity: '9 t',
+      weightLbs: 20000,
+      quantity: '10 tons',
       pickupWindowStart: hours(72),
       pickupWindowEnd: hours(96),
       askingPriceCents: 42000,
@@ -229,14 +230,17 @@ export async function seed(db: Db): Promise<boolean> {
       toStatus: 'draft',
     })
 
-    // 2. Posted load, no bids yet
+    // 2. Posted load, no bids yet — shows off the posting extras: location
+    // name, job name, notes and a travel time allowance.
     const [postedLoad] = await tx.insert(loads).values({
       shipperId,
+      pickupLocationName: 'Gate 3 — Rock Rd quarry',
       pickupAddress: 'Quarry Gate 3, 5500 Rock Rd',
       pickupCity: 'Nampa',
       pickupState: 'ID',
       pickupLat: geo('nampa').lat,
       pickupLng: geo('nampa').lng,
+      jobName: 'Riverside Apartments — phase 2',
       deliveryAddress: '1420 Riverside Site Office',
       deliveryCity: 'Boise',
       deliveryState: 'ID',
@@ -244,8 +248,10 @@ export async function seed(db: Db): Promise<boolean> {
       deliveryLng: geo('boise').lng,
       materialType: 'gravel',
       materialDescription: '3/4" crushed gravel',
-      weightKg: 18000,
-      quantity: '18 t',
+      weightLbs: 40000,
+      quantity: '20 tons',
+      notes: 'Check in at the scale house first. Tarps required on the highway leg.',
+      travelTimeAllowanceMin: 45,
       pickupWindowStart: hours(24),
       pickupWindowEnd: hours(48),
       askingPriceCents: 85000,
@@ -272,7 +278,7 @@ export async function seed(db: Db): Promise<boolean> {
       deliveryLng: geo('twin falls').lng,
       materialType: 'lumber',
       materialDescription: 'Framing lumber, banded bundles',
-      weightKg: 12000,
+      weightLbs: 26000,
       quantity: '14 bundles',
       pickupWindowStart: hours(36),
       pickupWindowEnd: hours(60),
@@ -332,7 +338,7 @@ export async function seed(db: Db): Promise<boolean> {
       deliveryLng: geo('horseshoe bend').lng,
       materialType: 'steel',
       materialDescription: 'W-beams, 40 ft',
-      weightKg: 20000,
+      weightLbs: 44000,
       quantity: '18 beams',
       pickupWindowStart: hours(12),
       pickupWindowEnd: hours(30),
@@ -385,8 +391,8 @@ export async function seed(db: Db): Promise<boolean> {
       deliveryLng: geo('boise').lng,
       materialType: 'aggregate',
       materialDescription: 'Road base, 1.5" minus',
-      weightKg: 16500,
-      quantity: '16.5 t',
+      weightLbs: 36000,
+      quantity: '18 tons',
       pickupWindowStart: hours(-6),
       pickupWindowEnd: hours(2),
       askingPriceCents: 68000,
@@ -440,11 +446,13 @@ export async function seed(db: Db): Promise<boolean> {
       shipperId: null,
       externalShipperName: 'Palouse Sand & Stone',
       externalShipperPhone: '+1 208 555 0400',
+      pickupLocationName: 'Pit 4',
       pickupAddress: 'Pit 4, 900 Quarry Rd',
       pickupCity: 'Kuna',
       pickupState: 'ID',
       pickupLat: geo('kuna').lat,
       pickupLng: geo('kuna').lng,
+      jobName: 'Palouse batch yard restock',
       deliveryAddress: 'Batch yard, 55 Industrial Ave',
       deliveryCity: 'Boise',
       deliveryState: 'ID',
@@ -452,8 +460,9 @@ export async function seed(db: Db): Promise<boolean> {
       deliveryLng: geo('boise').lng,
       materialType: 'sand',
       materialDescription: 'Fill sand, repeat weekly run',
-      weightKg: 15000,
-      quantity: '15 t',
+      weightLbs: 33000,
+      quantity: '16 tons',
+      notes: 'Loader on site from 6am. Take the haul road — no trucks past the office.',
       pickupWindowStart: hours(5),
       pickupWindowEnd: hours(9),
       askingPriceCents: 52000,
@@ -471,6 +480,51 @@ export async function seed(db: Db): Promise<boolean> {
       createdAt: hours(-1),
     })
 
+    // 5b. Unpriced two-truck internal move — price-less manual loads and the
+    // "Truck n/2" badges in one demo (both land in the Unassigned lane).
+    const yardMoveGroup = randomUUID()
+    for (let seq = 1; seq <= 2; seq++) {
+      const [internalLoad] = await tx.insert(loads).values({
+        source: 'manual' as const,
+        shipperId: null,
+        externalShipperName: 'Granite Haulers (internal)',
+        pickupLocationName: 'Old laydown yard',
+        pickupAddress: '2200 Gravel Way',
+        pickupCity: 'Caldwell',
+        pickupState: 'ID',
+        pickupLat: geo('caldwell').lat,
+        pickupLng: geo('caldwell').lng,
+        jobName: 'Yard consolidation',
+        deliveryAddress: 'New yard, 90 Ridge Rd',
+        deliveryCity: 'Nampa',
+        deliveryState: 'ID',
+        deliveryLat: geo('nampa').lat,
+        deliveryLng: geo('nampa').lng,
+        materialType: 'equipment' as const,
+        materialDescription: 'Forms, jersey barriers, attachments',
+        weightLbs: 24000,
+        notes: 'No rate — internal equipment move between our yards.',
+        truckGroupId: yardMoveGroup,
+        truckSeq: seq,
+        trucksTotal: 2,
+        pickupWindowStart: hours(26),
+        pickupWindowEnd: hours(32),
+        askingPriceCents: null,
+        finalPriceCents: null,
+        status: 'awarded' as const,
+        assignedCompanyId: graniteId,
+        awardedAt: hours(-0.5),
+      }).returning()
+      await tx.insert(loadEvents).values({
+        loadId: internalLoad!.id,
+        actorUserId: carrierAdmin!.id,
+        eventType: 'created',
+        toStatus: 'awarded',
+        payload: { manual: true, externalShipperName: 'Granite Haulers (internal)', truckSeq: seq, trucksTotal: 2 },
+        createdAt: hours(-0.5),
+      })
+    }
+
     // 6. Delivered load awaiting shipper confirmation
     const [deliveredLoad] = await tx.insert(loads).values({
       shipperId,
@@ -486,7 +540,7 @@ export async function seed(db: Db): Promise<boolean> {
       deliveryLng: geo('boise').lng,
       materialType: 'drywall',
       materialDescription: '5/8" Type X sheets',
-      weightKg: 8000,
+      weightLbs: 17500,
       quantity: '6 pallets',
       pickupWindowStart: hours(-50),
       pickupWindowEnd: hours(-40),

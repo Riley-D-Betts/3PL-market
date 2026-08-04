@@ -204,7 +204,7 @@ const CHIP_COLORS: Record<LoadStatus, string> = {
                 {{ l.deliveryCity }}, {{ l.deliveryState }}
               </p>
               <p class="text-sm text-muted mt-0.5">
-                {{ MATERIAL_TYPE_LABELS[l.materialType] }} · {{ formatWeight(l.weightKg) }} · {{ l.shipperName }}
+                {{ MATERIAL_TYPE_LABELS[l.materialType] }} · {{ formatWeight(l.weightLbs) }} · {{ l.shipperName ?? l.externalShipperName }}
               </p>
             </div>
             <UBadge v-if="!l.assignedDriverId && l.status === 'awarded'" color="warning" variant="soft">

@@ -56,10 +56,14 @@ const materialItems = [
                 {{ load.deliveryCity }}, {{ load.deliveryState }}
               </p>
               <p class="text-sm text-muted mt-0.5">
-                {{ MATERIAL_TYPE_LABELS[load.materialType] }} · {{ formatWeight(load.weightKg) }}
+                <span v-if="load.jobName" class="text-highlighted">{{ load.jobName }} · </span>
+                {{ MATERIAL_TYPE_LABELS[load.materialType] }} · {{ formatWeight(load.weightLbs) }}
                 · pickup {{ formatDate(load.pickupWindowStart) }} · {{ load.shipperName }}
               </p>
             </div>
+            <UBadge v-if="load.truckSeq" variant="soft" color="info" class="tabular-nums">
+              Truck {{ load.truckSeq }}/{{ load.trucksTotal }}
+            </UBadge>
             <UBadge v-if="load.myBid" color="info" variant="soft">
               Your bid: {{ formatCents(load.myBid.amountCents) }}
             </UBadge>

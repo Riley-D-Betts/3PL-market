@@ -20,7 +20,7 @@ export default defineEventHandler(async (event) => {
     deliveryCity: loads.deliveryCity,
     deliveryState: loads.deliveryState,
     materialType: loads.materialType,
-    weightKg: loads.weightKg,
+    weightLbs: loads.weightLbs,
     askingPriceCents: loads.askingPriceCents,
     pickupWindowStart: loads.pickupWindowStart,
   })

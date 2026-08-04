@@ -45,9 +45,11 @@ const statusItems = [
                 {{ load.pickupCity }}, {{ load.pickupState }}
                 <UIcon name="i-lucide-arrow-right" class="size-4 inline text-muted" />
                 {{ load.deliveryCity }}, {{ load.deliveryState }}
+                <span v-if="load.truckSeq" class="text-muted font-normal text-sm tabular-nums">· truck {{ load.truckSeq }}/{{ load.trucksTotal }}</span>
+                <span v-if="load.jobName" class="text-muted font-normal text-sm">· {{ load.jobName }}</span>
               </p>
               <p class="text-sm text-muted mt-0.5">
-                {{ MATERIAL_TYPE_LABELS[load.materialType] }} · {{ formatWeight(load.weightKg) }}
+                {{ MATERIAL_TYPE_LABELS[load.materialType] }} · {{ formatWeight(load.weightLbs) }}
                 · pickup {{ formatDate(load.pickupWindowStart) }}
               </p>
             </div>

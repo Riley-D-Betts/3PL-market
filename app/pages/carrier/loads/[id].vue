@@ -124,8 +124,9 @@ const mapPoints = computed(() => {
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <div class="flex items-center gap-3">
-          <h1 class="text-xl font-bold text-highlighted">{{ load.pickupCity }} → {{ load.deliveryCity }}</h1>
+          <h1 class="text-xl font-bold text-highlighted">{{ load.jobName || `${load.pickupCity} → ${load.deliveryCity}` }}</h1>
           <UBadge variant="outline" color="neutral" class="tabular-nums">{{ formatLoadNumber(load.loadNumber) }}</UBadge>
+          <UBadge v-if="load.truckSeq" variant="soft" color="info" class="tabular-nums">Truck {{ load.truckSeq }}/{{ load.trucksTotal }}</UBadge>
           <UBadge v-if="load.source === 'manual'" variant="subtle" color="neutral">external</UBadge>
           <LoadStatusBadge :status="load.status" />
         </div>
@@ -221,7 +222,7 @@ const mapPoints = computed(() => {
       <template #header>
         <h2 class="font-semibold text-highlighted">Plan the next leg</h2>
         <p class="text-sm text-muted mt-1">
-          Open loads near {{ nextLegs.from.city }}, {{ nextLegs.from.state }} — where this run ends<template v-if="nextLegs.vehicle">, rated for {{ nextLegs.vehicle.plate }} ({{ formatWeight(nextLegs.vehicle.capacityKg) }} capacity)</template>.
+          Open loads near {{ nextLegs.from.city }}, {{ nextLegs.from.state }} — where this run ends<template v-if="nextLegs.vehicle">, rated for {{ nextLegs.vehicle.plate }} ({{ formatWeight(nextLegs.vehicle.capacityLbs) }} capacity)</template>.
         </p>
       </template>
       <div class="space-y-2">
@@ -232,7 +233,7 @@ const mapPoints = computed(() => {
           class="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-default p-3 hover:bg-elevated transition-colors"
         >
           <UBadge variant="soft" color="info" class="tabular-nums shrink-0 w-20 justify-center">
-            {{ formatKm(candidate.distanceKm) }}
+            {{ formatMiles(candidate.distanceMiles) }}
           </UBadge>
           <div class="flex-1 min-w-48">
             <p class="font-medium text-highlighted">
@@ -242,7 +243,7 @@ const mapPoints = computed(() => {
               {{ candidate.deliveryCity }}, {{ candidate.deliveryState }}
             </p>
             <p class="text-sm text-muted mt-0.5">
-              {{ MATERIAL_TYPE_LABELS[candidate.materialType] }} · {{ formatWeight(candidate.weightKg) }}
+              {{ MATERIAL_TYPE_LABELS[candidate.materialType] }} · {{ formatWeight(candidate.weightLbs) }}
               · pickup {{ formatDate(candidate.pickupWindowStart) }}
             </p>
           </div>

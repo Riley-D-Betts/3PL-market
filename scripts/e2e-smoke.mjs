@@ -68,9 +68,15 @@ const { data: created } = await shipper('/api/loads', {
   method: 'POST',
   expect: 201,
   body: {
+    pickupLocationName: 'E2E Gate 3',
     pickupAddress: 'E2E Quarry Gate', pickupCity: 'Boise', pickupState: 'ID',
+    jobName: 'E2E Tower Job',
     deliveryAddress: 'E2E Jobsite', deliveryCity: 'Meridian', deliveryState: 'ID',
-    materialType: 'gravel', weightKg: 14000,
+    // Explicit pin (a dropped Google Maps pin) for the pickup end.
+    pickupLat: 43.6101, pickupLng: -116.2101,
+    materialType: 'gravel', weightLbs: 30000,
+    notes: 'E2E: tarp required, scale tickets to the office',
+    travelTimeAllowanceMin: 30,
     pickupWindowStart: new Date(Date.now() + 86400_000).toISOString(),
     pickupWindowEnd: new Date(Date.now() + 2 * 86400_000).toISOString(),
     askingPriceCents: 70000,
@@ -81,8 +87,12 @@ const { data: created } = await shipper('/api/loads', {
 })
 const loadId = created.load.id
 check('load created and posted', created.load.status === 'posted')
-check('load geocoded from the seeded cache (Boise pickup)', Math.abs((created.load.pickupLat ?? 0) - 43.615) < 0.01)
+check('dropped pin wins over geocoding (pickup)', created.load.pickupLat === 43.6101 && created.load.pickupLng === -116.2101)
 check('load geocoded from the seeded cache (Meridian delivery)', Math.abs((created.load.deliveryLat ?? 0) - 43.6121) < 0.01)
+check('posting extras round-trip', created.load.pickupLocationName === 'E2E Gate 3'
+  && created.load.jobName === 'E2E Tower Job'
+  && created.load.notes.startsWith('E2E: tarp')
+  && created.load.travelTimeAllowanceMin === 30)
 
 // ── 2. Board visibility ─────────────────────────────────────────────────────
 console.log('\n2. board visibility')
@@ -174,7 +184,9 @@ const { data: fleetDrivers } = await granite('/api/fleet/drivers', { expect: 200
 const dale = fleetDrivers.drivers.find(d => d.email === 'driver1@demo.test')
 check('seeded driver has a geocoded home base', dale?.homeBaseCity === 'Boise' && typeof dale?.homeBaseLat === 'number')
 const { data: graniteWon } = await granite('/api/carrier/loads', { expect: 200 })
-const withDriver = graniteWon.loads.find(l => l.assignedDriverId)
+// Marketplace loads only: re-runs leave behind 8d's manual loads whose
+// throwaway driver has no home base, which would poison this check.
+const withDriver = graniteWon.loads.find(l => l.assignedDriverId && l.source !== 'manual')
 if (withDriver) {
   const { data: dispatch } = await granite(`/api/loads/${withDriver.id}`, { expect: 200 })
   check('dispatch view exposes the assigned driver home base', typeof dispatch.assignedDriver?.homeBaseLat === 'number')
@@ -207,15 +219,22 @@ console.log('\n8d. manual (off-platform) load lifecycle')
       externalShipperName: 'E2E Offline Customer',
       pickupAddress: 'X', pickupCity: 'Boise', pickupState: 'ID',
       deliveryAddress: 'Y', deliveryCity: 'Meridian', deliveryState: 'ID',
-      materialType: 'sand', weightKg: 9000,
+      materialType: 'sand', weightLbs: 20000,
       pickupWindowStart: new Date(Date.now() + 3600_000).toISOString(),
       pickupWindowEnd: new Date(Date.now() + 7200_000).toISOString(),
-      priceCents: 40000,
+      // No priceCents: internal work needs no rate.
+      trucksRequested: 2,
       driverId: extDriver.driver.id,
     },
   })
   check('manual load starts awarded with source=manual', manual.load.status === 'awarded' && manual.load.source === 'manual')
   check('manual load geocoded from cache', typeof manual.load.pickupLat === 'number')
+  check('price-less internal load has no charges', manual.load.askingPriceCents === null && manual.load.finalPriceCents === null)
+  check('two trucks create two sibling loads', manual.loads.length === 2
+    && manual.loads[0].truckSeq === 1 && manual.loads[1].truckSeq === 2
+    && manual.loads[0].trucksTotal === 2
+    && manual.loads[0].truckGroupId === manual.loads[1].truckGroupId)
+  check('driver rides truck 1 only', manual.loads[0].assignedDriverId === extDriver.driver.id && manual.loads[1].assignedDriverId === null)
 
   const { data: c2board } = await carrier2('/api/board', { expect: 200 })
   check('manual load never appears on the board', !c2board.loads.some(l => l.id === manual.load.id))
@@ -234,9 +253,36 @@ console.log('\n8e. next-leg planner')
   const { data: won } = await granite('/api/carrier/loads', { expect: 200 })
   const ref = won.loads.find(l => l.status === 'awarded' && l.source !== 'manual') ?? won.loads[0]
   const { data: plan } = await granite(`/api/carrier/next-loads?fromLoadId=${ref.id}`, { expect: 200 })
-  check('planner returns suggestions with distances', plan.suggestions.length >= 1 && typeof plan.suggestions[0].distanceKm === 'number')
-  const dists = plan.suggestions.map(s => s.distanceKm ?? Number.POSITIVE_INFINITY)
+  check('planner returns suggestions with distances', plan.suggestions.length >= 1 && typeof plan.suggestions[0].distanceMiles === 'number')
+  const dists = plan.suggestions.map(s => s.distanceMiles ?? Number.POSITIVE_INFINITY)
   check('suggestions sorted nearest first', dists.every((d, i) => i === 0 || d >= dists[i - 1]))
+}
+
+console.log('\n8f. multi-truck marketplace request')
+{
+  const { data: fleetPost } = await shipper('/api/loads', {
+    method: 'POST',
+    expect: 201,
+    body: {
+      pickupAddress: 'E2E Pit', pickupCity: 'Nampa', pickupState: 'ID',
+      jobName: 'E2E Three-Truck Job',
+      deliveryAddress: 'E2E Pad', deliveryCity: 'Boise', deliveryState: 'ID',
+      materialType: 'aggregate', weightLbs: 44000,
+      pickupWindowStart: new Date(Date.now() + 86400_000).toISOString(),
+      pickupWindowEnd: new Date(Date.now() + 2 * 86400_000).toISOString(),
+      askingPriceCents: 60000,
+      trucksRequested: 3,
+      post: true,
+    },
+  })
+  check('three trucks post three sibling loads', fleetPost.loads.length === 3
+    && fleetPost.loads.map(l => l.truckSeq).join(',') === '1,2,3'
+    && fleetPost.loads.every(l => l.trucksTotal === 3 && l.truckGroupId === fleetPost.loads[0].truckGroupId))
+  const { data: boardNow } = await carrier2('/api/board', { expect: 200 })
+  check('every sibling is individually on the board', fleetPost.loads.every(l => boardNow.loads.some(b => b.id === l.id)))
+  for (const l of fleetPost.loads) {
+    await shipper(`/api/loads/${l.id}/cancel`, { method: 'POST', expect: 200 })
+  }
 }
 
 console.log('\n9. demo mode (skipped when the flag is off)')
