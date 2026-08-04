@@ -3,6 +3,7 @@ import type { LoadStatus } from '#shared/types'
 
 interface BoardLoad {
   id: string
+  loadNumber: number
   status: LoadStatus
   pickupCity: string
   deliveryCity: string
@@ -180,7 +181,7 @@ const timeOf = (value: string | Date) =>
                 top: `${block.subRow * 44 + 4}px`,
                 height: '40px',
               }"
-              :title="`${block.load.pickupCity} → ${block.load.deliveryCity} · window ${timeOf(block.load.pickupWindowStart)}–${timeOf(block.load.pickupWindowEnd)} · ${LOAD_STATUS_LABELS[block.load.status]}`"
+              :title="`${formatLoadNumber(block.load.loadNumber)} · ${block.load.pickupCity} → ${block.load.deliveryCity} · window ${timeOf(block.load.pickupWindowStart)}–${timeOf(block.load.pickupWindowEnd)} · ${LOAD_STATUS_LABELS[block.load.status]}`"
             >
               <span class="block font-semibold truncate">{{ block.load.pickupCity }} → {{ block.load.deliveryCity }}</span>
               <span class="block truncate opacity-90">

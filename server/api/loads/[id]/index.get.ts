@@ -20,7 +20,7 @@ export default defineEventHandler(async (event) => {
   // Board browsing (posted loads) requires an approved carrier that the
   // shipper has not blocked; an assigned carrier keeps access to its
   // in-flight loads regardless of company status.
-  const blockedForViewer = isCarrierAdmin
+  const blockedForViewer = isCarrierAdmin && load.shipperId !== null
     ? await isCarrierBlocked(db, load.shipperId, company!.id)
     : false
   const canView = isOwner || isSuperadmin || isAssignedDriver || isAssignedCarrier
@@ -115,10 +115,12 @@ export default defineEventHandler(async (event) => {
   const assignedVehicle = load.assignedVehicleId
     ? await db.query.vehicles.findFirst({ where: eq(vehicles.id, load.assignedVehicleId), columns: { id: true, type: true, plate: true } })
     : null
-  const shipper = await db.query.users.findFirst({
-    where: eq(users.id, load.shipperId),
-    columns: { id: true, name: true, phone: true, email: true, billingEmail: true },
-  })
+  const shipper = load.shipperId
+    ? await db.query.users.findFirst({
+        where: eq(users.id, load.shipperId),
+        columns: { id: true, name: true, phone: true, email: true, billingEmail: true },
+      })
+    : null
 
   // On-site contacts belong to the working relationship — never to board
   // browsers. Same for the invoicing address.
@@ -130,12 +132,19 @@ export default defineEventHandler(async (event) => {
     ? (shipper?.billingEmail ?? shipper?.email ?? null)
     : null
 
+  // Manual loads: expose the free-text customer in place of a shipper account.
+  const shipperInfo = shipper
+    ? { id: shipper.id, name: shipper.name, phone: shipper.phone }
+    : (load.externalShipperName && canSeeContacts
+        ? { id: null, name: `${load.externalShipperName} (off-platform)`, phone: load.externalShipperPhone }
+        : null)
+
   return {
     load: visibleLoad,
     events,
     bids: bidList,
     myBid,
-    shipper: shipper ? { id: shipper.id, name: shipper.name, phone: shipper.phone } : null,
+    shipper: shipperInfo,
     invoiceEmail,
     assignedCompany,
     assignedDriver,

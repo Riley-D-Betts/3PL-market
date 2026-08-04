@@ -165,6 +165,30 @@ describe('arrival guards', () => {
   })
 })
 
+describe('manual (off-platform) loads', () => {
+  const manual = (status: LoadStatus, opts: Partial<LoadLike> = {}) =>
+    load(status, { shipperId: null, assignedCompanyId: CARRIER_CO, assignedDriverId: DRIVER_ID, ...opts })
+
+  it('the assigned carrier admin holds owner powers', () => {
+    expect(canTransition(carrierAdmin, manual('delivered', { arrivedPickupAt: new Date(), arrivedDeliveryAt: new Date() }), 'completed')).toBe(true)
+    expect(canTransition(carrierAdmin, manual('awarded'), 'cancelled')).toBe(true)
+  })
+
+  it('other carriers and drivers gain no owner powers', () => {
+    expect(canTransition(otherCarrierAdmin, manual('delivered', { arrivedDeliveryAt: new Date() }), 'completed')).toBe(false)
+    expect(canTransition(assignedDriver, manual('delivered', { arrivedDeliveryAt: new Date() }), 'completed')).toBe(false)
+  })
+
+  it('manual loads can never be posted to the board', () => {
+    expect(canTransition(carrierAdmin, manual('draft'), 'posted')).toBe(false)
+  })
+
+  it('the driver flow works unchanged', () => {
+    expect(canTransition(assignedDriver, manual('awarded', { arrivedPickupAt: new Date() }), 'picked_up')).toBe(true)
+    expect(canTransition(assignedDriver, manual('picked_up', { arrivedDeliveryAt: new Date() }), 'delivered')).toBe(true)
+  })
+})
+
 describe('machine shape', () => {
   it('covers every status', () => {
     for (const status of LOAD_STATUSES) {

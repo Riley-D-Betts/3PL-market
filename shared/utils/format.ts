@@ -85,6 +85,16 @@ export const EVENT_TYPE_LABELS: Record<string, string> = {
   note: 'Note',
 }
 
+/** Human load reference: L-1042. */
+export function formatLoadNumber(n: number | null | undefined): string {
+  return n == null ? '' : `L-${n}`
+}
+
+export function formatKm(km: number | null | undefined): string {
+  if (km == null) return '—'
+  return `${km < 10 ? km.toFixed(1) : Math.round(km)} km`
+}
+
 export function formatMinutes(minutes: number): string {
   if (minutes < 60) return `${minutes} min`
   const h = Math.floor(minutes / 60)

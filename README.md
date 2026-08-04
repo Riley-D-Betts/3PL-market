@@ -79,6 +79,14 @@ The driver's flow is **arrive → load → depart** at each stop: "Arrived at pi
 - **Calendar** (`/carrier/calendar`): month grid of the carrier's won loads placed on their pickup windows, status-colored, with "needs driver" warnings; clicking a day lists its pickups with times, drivers and links for scheduling the day.
 - **Day board** (Day toggle on the calendar): a per-driver timeline of the selected day — one lane per active driver plus an "Unassigned" lane, load blocks positioned on an hour axis by pickup window (overlaps stack), a now-line on today, each block linking to dispatch.
 - **Reports** (`/carrier/reports`): date-range report grouped by driver and by vehicle — loads, completions, weight hauled, revenue (line haul + detention, delivered/confirmed only) — with summary tiles and CSV export.
+- **Next-leg planner** (dispatch view): open board loads ranked by distance (km) from where the current run ends, with capacity and material-fit hints for the selected vehicle — advisory badges, never a hard filter.
+
+### Fleet ops
+
+- **Load numbers**: every load gets a short reference (`L-1042`) shown to shippers, carriers, drivers and admins across lists, details and the day board.
+- **External loads**: carriers can enter freight booked outside the marketplace ("Add external load") — free-text customer, agreed price, optional immediate dispatch. It gets a load number and flows through the calendar, day board, driver arrive/pickup/deliver flow and reports exactly like a won load, but never appears on the board; the carrier admin confirms completion. This lets a 3PL run its whole operation here before the shipper side fills in.
+- **Insurance & maintenance**: vehicles track policy number, insurance expiry, next service due and odometer (km) with expiring/overdue badges on the fleet page, plus a per-vehicle maintenance log (date, work, cost, odometer).
+- **Units**: all measures are metric — weights in kg (displayed in tonnes), distances and odometers in km.
 - **Maps**: every load detail page shows a Leaflet/OpenStreetMap route map with pickup and delivery pins; the carrier dispatch view also pins the assigned driver's **home base** (set per driver in the Drivers page) to help pick who's closest.
 - Coordinates come from best-effort **Nominatim geocoding** at load/driver save time, cached city-level in the database (the demo seed prefills real Idaho coordinates, so maps work offline). Missing coordinates degrade gracefully — the map simply doesn't render.
 
