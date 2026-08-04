@@ -57,7 +57,7 @@ async function withdraw(bidId: string) {
               {{ bid.deliveryCity }}, {{ bid.deliveryState }}
             </p>
             <p class="text-sm text-muted mt-0.5">
-              {{ MATERIAL_TYPE_LABELS[bid.materialType] }} · {{ formatWeight(bid.weightKg) }}
+              {{ MATERIAL_TYPE_LABELS[bid.materialType] }} · {{ formatWeight(bid.weightLbs) }}
               · asking {{ formatCents(bid.askingPriceCents) }} · {{ formatDateTime(bid.updatedAt) }}
             </p>
           </div>

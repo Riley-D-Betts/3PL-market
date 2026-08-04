@@ -34,18 +34,18 @@ const rangeSuffix = computed(() => `${from.value}_${to.value}`)
 
 function exportDrivers() {
   downloadCsv(`drivers-report-${rangeSuffix.value}.csv`,
-    ['Driver', 'Loads', 'Completed', 'Weight (kg)', 'Revenue', 'Of which detention'],
+    ['Driver', 'Loads', 'Completed', 'Weight (lbs)', 'Revenue', 'Of which detention'],
     (data.value?.byDriver ?? []).map(r => [
-      r.driverName, r.totalLoads, r.completedLoads, r.weightKg,
+      r.driverName, r.totalLoads, r.completedLoads, r.weightLbs,
       (r.revenueCents / 100).toFixed(2), (r.detentionCents / 100).toFixed(2),
     ]))
 }
 
 function exportVehicles() {
   downloadCsv(`vehicles-report-${rangeSuffix.value}.csv`,
-    ['Vehicle', 'Type', 'Loads', 'Completed', 'Weight (kg)', 'Revenue', 'Of which detention'],
+    ['Vehicle', 'Type', 'Loads', 'Completed', 'Weight (lbs)', 'Revenue', 'Of which detention'],
     (data.value?.byVehicle ?? []).map(r => [
-      r.plate, r.type, r.totalLoads, r.completedLoads, r.weightKg,
+      r.plate, r.type, r.totalLoads, r.completedLoads, r.weightLbs,
       (r.revenueCents / 100).toFixed(2), (r.detentionCents / 100).toFixed(2),
     ]))
 }
@@ -118,7 +118,7 @@ function exportVehicles() {
                 <td class="px-4 py-2 font-medium text-highlighted">{{ row.driverName }}</td>
                 <td class="px-4 py-2 text-right tabular-nums">{{ row.totalLoads }}</td>
                 <td class="px-4 py-2 text-right tabular-nums">{{ row.completedLoads }}</td>
-                <td class="px-4 py-2 text-right tabular-nums">{{ formatWeight(row.weightKg) }}</td>
+                <td class="px-4 py-2 text-right tabular-nums">{{ formatWeight(row.weightLbs) }}</td>
                 <td class="px-4 py-2 text-right tabular-nums font-medium text-highlighted">{{ formatCents(row.revenueCents) }}</td>
                 <td class="px-4 py-2 text-right tabular-nums">{{ formatCents(row.detentionCents) }}</td>
               </tr>
@@ -156,7 +156,7 @@ function exportVehicles() {
                 </td>
                 <td class="px-4 py-2 text-right tabular-nums">{{ row.totalLoads }}</td>
                 <td class="px-4 py-2 text-right tabular-nums">{{ row.completedLoads }}</td>
-                <td class="px-4 py-2 text-right tabular-nums">{{ formatWeight(row.weightKg) }}</td>
+                <td class="px-4 py-2 text-right tabular-nums">{{ formatWeight(row.weightLbs) }}</td>
                 <td class="px-4 py-2 text-right tabular-nums font-medium text-highlighted">{{ formatCents(row.revenueCents) }}</td>
                 <td class="px-4 py-2 text-right tabular-nums">{{ formatCents(row.detentionCents) }}</td>
               </tr>

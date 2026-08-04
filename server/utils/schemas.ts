@@ -13,6 +13,40 @@ const dateInput = z.union([z.string().min(1), z.date()]).pipe(z.coerce.date())
 const contactName = z.string().trim().min(1).max(200)
 const contactPhone = z.string().trim().min(1).max(50)
 
+const latitude = z.number().min(-90).max(90)
+const longitude = z.number().min(-180).max(180)
+
+/** Fields shared by shipper-posted and carrier-entered (manual) loads. */
+const loadCommonFields = {
+  pickupLocationName: z.string().trim().min(1).max(200).optional(),
+  pickupAddress: z.string().trim().min(1).max(500),
+  pickupCity: z.string().trim().min(1).max(100),
+  pickupState: z.string().trim().min(1).max(50),
+  jobName: z.string().trim().min(1).max(200).optional(),
+  deliveryAddress: z.string().trim().min(1).max(500),
+  deliveryCity: z.string().trim().min(1).max(100),
+  deliveryState: z.string().trim().min(1).max(50),
+  // Explicit pin coordinates (e.g. a dropped Google Maps pin) win over geocoding.
+  pickupLat: latitude.optional(),
+  pickupLng: longitude.optional(),
+  deliveryLat: latitude.optional(),
+  deliveryLng: longitude.optional(),
+  materialType: z.enum(MATERIAL_TYPES),
+  materialDescription: z.string().trim().max(2000).optional(),
+  weightLbs: z.number().int().positive(),
+  quantity: z.string().trim().max(200).optional(),
+  notes: z.string().trim().max(4000).optional(),
+  travelTimeAllowanceMin: z.number().int().min(0).max(1440).optional(),
+  /** Posting with N trucks creates N sibling loads, one per truck. */
+  trucksRequested: z.number().int().min(1).max(50).default(1),
+  pickupWindowStart: dateInput,
+  pickupWindowEnd: dateInput,
+  pickupContactName: contactName.optional(),
+  pickupContactPhone: contactPhone.optional(),
+  deliveryContactName: contactName.optional(),
+  deliveryContactPhone: contactPhone.optional(),
+}
+
 /** Detention terms a carrier proposes with its bid / instant accept. */
 const detentionTerms = {
   detentionFreeMinutes: z.number().int().min(0).max(1440).default(120),
@@ -48,40 +82,33 @@ export const registerCarrierSchema = z.object({
 })
 
 export const loadInputSchema = z.object({
-  pickupAddress: z.string().trim().min(1).max(500),
-  pickupCity: z.string().trim().min(1).max(100),
-  pickupState: z.string().trim().min(1).max(50),
-  deliveryAddress: z.string().trim().min(1).max(500),
-  deliveryCity: z.string().trim().min(1).max(100),
-  deliveryState: z.string().trim().min(1).max(50),
-  materialType: z.enum(MATERIAL_TYPES),
-  materialDescription: z.string().trim().max(2000).optional(),
-  weightKg: z.number().int().positive(),
-  quantity: z.string().trim().max(200).optional(),
-  pickupWindowStart: dateInput,
-  pickupWindowEnd: dateInput,
+  ...loadCommonFields,
   askingPriceCents: z.number().int().positive(),
-  pickupContactName: contactName.optional(),
-  pickupContactPhone: contactPhone.optional(),
-  deliveryContactName: contactName.optional(),
-  deliveryContactPhone: contactPhone.optional(),
   post: z.boolean().optional().default(false),
 }).refine(v => v.pickupWindowStart <= v.pickupWindowEnd, {
-  message: 'Pickup window start must be before its end',
+  message: 'First load time must be before the last load time',
   path: ['pickupWindowEnd'],
 })
 
 export const loadPatchSchema = z.object({
+  pickupLocationName: z.string().trim().min(1).max(200).nullable().optional(),
   pickupAddress: z.string().trim().min(1).max(500).optional(),
   pickupCity: z.string().trim().min(1).max(100).optional(),
   pickupState: z.string().trim().min(1).max(50).optional(),
+  jobName: z.string().trim().min(1).max(200).nullable().optional(),
   deliveryAddress: z.string().trim().min(1).max(500).optional(),
   deliveryCity: z.string().trim().min(1).max(100).optional(),
   deliveryState: z.string().trim().min(1).max(50).optional(),
+  pickupLat: latitude.optional(),
+  pickupLng: longitude.optional(),
+  deliveryLat: latitude.optional(),
+  deliveryLng: longitude.optional(),
   materialType: z.enum(MATERIAL_TYPES).optional(),
   materialDescription: z.string().trim().max(2000).nullable().optional(),
-  weightKg: z.number().int().positive().optional(),
+  weightLbs: z.number().int().positive().optional(),
   quantity: z.string().trim().max(200).nullable().optional(),
+  notes: z.string().trim().max(4000).nullable().optional(),
+  travelTimeAllowanceMin: z.number().int().min(0).max(1440).nullable().optional(),
   pickupWindowStart: dateInput.optional(),
   pickupWindowEnd: dateInput.optional(),
   askingPriceCents: z.number().int().positive().optional(),
@@ -89,6 +116,12 @@ export const loadPatchSchema = z.object({
   pickupContactPhone: contactPhone.nullable().optional(),
   deliveryContactName: contactName.nullable().optional(),
   deliveryContactPhone: contactPhone.nullable().optional(),
+}).refine(v => (v.pickupLat === undefined) === (v.pickupLng === undefined), {
+  message: 'pickupLat and pickupLng must be sent together',
+  path: ['pickupLng'],
+}).refine(v => (v.deliveryLat === undefined) === (v.deliveryLng === undefined), {
+  message: 'deliveryLat and deliveryLng must be sent together',
+  path: ['deliveryLng'],
 })
 
 export const bidInputSchema = z.object({
@@ -116,31 +149,16 @@ export const reportsQuerySchema = z.object({
   to: dateInput.optional(),
 })
 
-/** Off-platform load a carrier manages through the system. */
+/** Off-platform load a carrier manages through the system. Price is optional — internal work needs no rate. */
 export const manualLoadSchema = z.object({
-  pickupAddress: z.string().trim().min(1).max(500),
-  pickupCity: z.string().trim().min(1).max(100),
-  pickupState: z.string().trim().min(1).max(50),
-  deliveryAddress: z.string().trim().min(1).max(500),
-  deliveryCity: z.string().trim().min(1).max(100),
-  deliveryState: z.string().trim().min(1).max(50),
-  materialType: z.enum(MATERIAL_TYPES),
-  materialDescription: z.string().trim().max(2000).optional(),
-  weightKg: z.number().int().positive(),
-  quantity: z.string().trim().max(200).optional(),
-  pickupWindowStart: dateInput,
-  pickupWindowEnd: dateInput,
-  priceCents: z.number().int().positive(),
+  ...loadCommonFields,
+  priceCents: z.number().int().positive().optional(),
   externalShipperName: z.string().trim().min(1).max(200),
   externalShipperPhone: z.string().trim().max(50).optional(),
-  pickupContactName: contactName.optional(),
-  pickupContactPhone: contactPhone.optional(),
-  deliveryContactName: contactName.optional(),
-  deliveryContactPhone: contactPhone.optional(),
   driverId: z.uuid().optional(),
   vehicleId: z.uuid().optional(),
 }).refine(v => v.pickupWindowStart <= v.pickupWindowEnd, {
-  message: 'Pickup window start must be before its end',
+  message: 'First load time must be before the last load time',
   path: ['pickupWindowEnd'],
 })
 
@@ -156,32 +174,32 @@ export const awardSchema = z.object({
 export const vehicleInputSchema = z.object({
   type: z.enum(VEHICLE_TYPES),
   plate: z.string().trim().min(1).max(20),
-  capacityKg: z.number().int().positive(),
+  capacityLbs: z.number().int().positive(),
   status: z.enum(VEHICLE_STATUSES).optional().default('active'),
   notes: z.string().trim().max(1000).optional(),
   insurancePolicy: z.string().trim().max(100).optional(),
   insuranceExpiresAt: dateInput.optional(),
   nextServiceDueAt: dateInput.optional(),
-  odometerKm: z.number().int().min(0).optional(),
+  odometerMi: z.number().int().min(0).optional(),
 })
 
 export const vehiclePatchSchema = z.object({
   type: z.enum(VEHICLE_TYPES).optional(),
   plate: z.string().trim().min(1).max(20).optional(),
-  capacityKg: z.number().int().positive().optional(),
+  capacityLbs: z.number().int().positive().optional(),
   status: z.enum(VEHICLE_STATUSES).optional(),
   notes: z.string().trim().max(1000).nullable().optional(),
   insurancePolicy: z.string().trim().max(100).nullable().optional(),
   insuranceExpiresAt: dateInput.nullable().optional(),
   nextServiceDueAt: dateInput.nullable().optional(),
-  odometerKm: z.number().int().min(0).nullable().optional(),
+  odometerMi: z.number().int().min(0).nullable().optional(),
 })
 
 export const maintenanceLogSchema = z.object({
   performedAt: dateInput,
   description: z.string().trim().min(1).max(1000),
   costCents: z.number().int().min(0).optional(),
-  odometerKm: z.number().int().min(0).optional(),
+  odometerMi: z.number().int().min(0).optional(),
 })
 
 export const driverCreateSchema = z.object({
@@ -219,6 +237,6 @@ export const boardQuerySchema = z.object({
   materialType: z.enum(MATERIAL_TYPES).optional(),
   pickupState: z.string().trim().max(50).optional(),
   q: z.string().trim().max(100).optional(),
-  maxWeightKg: z.coerce.number().int().positive().optional(),
+  maxWeightLbs: z.coerce.number().int().positive().optional(),
 })
 

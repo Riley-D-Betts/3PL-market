@@ -5,8 +5,11 @@ export function formatCents(cents: number | null | undefined, currency = 'USD'):
   return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(cents / 100)
 }
 
-export function formatWeight(kg: number): string {
-  return kg >= 1000 ? `${(kg / 1000).toLocaleString('en-US', { maximumFractionDigits: 1 })} t` : `${kg} kg`
+/** Pounds in, "16.5 tons" (short tons) or "900 lbs" out. */
+export function formatWeight(lbs: number): string {
+  return lbs >= 2000
+    ? `${(lbs / 2000).toLocaleString('en-US', { maximumFractionDigits: 1 })} tons`
+    : `${lbs.toLocaleString('en-US')} lbs`
 }
 
 export function formatDate(value: string | Date | null | undefined): string {
@@ -90,9 +93,9 @@ export function formatLoadNumber(n: number | null | undefined): string {
   return n == null ? '' : `L-${n}`
 }
 
-export function formatKm(km: number | null | undefined): string {
-  if (km == null) return '—'
-  return `${km < 10 ? km.toFixed(1) : Math.round(km)} km`
+export function formatMiles(mi: number | null | undefined): string {
+  if (mi == null) return '—'
+  return `${mi < 10 ? mi.toFixed(1) : Math.round(mi)} mi`
 }
 
 export function formatMinutes(minutes: number): string {

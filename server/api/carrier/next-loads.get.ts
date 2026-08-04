@@ -1,6 +1,6 @@
 import { and, eq, ne, notExists, sql } from 'drizzle-orm'
 import { createError } from 'h3'
-import { haversineKm, materialFitsVehicle } from '../../../shared/utils/geo'
+import { haversineMiles, materialFitsVehicle } from '../../../shared/utils/geo'
 
 /**
  * Next-leg planner: open board loads ranked by distance from where the
@@ -31,7 +31,7 @@ export default defineEventHandler(async (event) => {
     pickupLat: loads.pickupLat,
     pickupLng: loads.pickupLng,
     materialType: loads.materialType,
-    weightKg: loads.weightKg,
+    weightLbs: loads.weightLbs,
     askingPriceCents: loads.askingPriceCents,
     pickupWindowStart: loads.pickupWindowStart,
   })
@@ -54,18 +54,18 @@ export default defineEventHandler(async (event) => {
   const suggestions = open
     .map(candidate => ({
       ...candidate,
-      distanceKm: from && candidate.pickupLat !== null && candidate.pickupLng !== null
-        ? Math.round(haversineKm(from.lat, from.lng, candidate.pickupLat, candidate.pickupLng) * 10) / 10
+      distanceMiles: from && candidate.pickupLat !== null && candidate.pickupLng !== null
+        ? Math.round(haversineMiles(from.lat, from.lng, candidate.pickupLat, candidate.pickupLng) * 10) / 10
         : null,
-      fitsCapacity: vehicle ? candidate.weightKg <= vehicle.capacityKg : null,
+      fitsCapacity: vehicle ? candidate.weightLbs <= vehicle.capacityLbs : null,
       materialFit: vehicle ? materialFitsVehicle(candidate.materialType, vehicle.type) : null,
     }))
-    .sort((a, b) => (a.distanceKm ?? Number.POSITIVE_INFINITY) - (b.distanceKm ?? Number.POSITIVE_INFINITY))
+    .sort((a, b) => (a.distanceMiles ?? Number.POSITIVE_INFINITY) - (b.distanceMiles ?? Number.POSITIVE_INFINITY))
     .slice(0, 10)
 
   return {
     from: { city: reference.deliveryCity, state: reference.deliveryState, hasCoordinates: from !== null },
-    vehicle: vehicle ? { id: vehicle.id, plate: vehicle.plate, type: vehicle.type, capacityKg: vehicle.capacityKg } : null,
+    vehicle: vehicle ? { id: vehicle.id, plate: vehicle.plate, type: vehicle.type, capacityLbs: vehicle.capacityLbs } : null,
     suggestions,
   }
 })

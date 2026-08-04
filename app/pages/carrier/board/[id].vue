@@ -94,8 +94,9 @@ const mapPoints = computed(() => {
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <div class="flex items-center gap-3">
-          <h1 class="text-xl font-bold text-highlighted">{{ load.pickupCity }} → {{ load.deliveryCity }}</h1>
+          <h1 class="text-xl font-bold text-highlighted">{{ load.jobName || `${load.pickupCity} → ${load.deliveryCity}` }}</h1>
           <UBadge variant="outline" color="neutral" class="tabular-nums">{{ formatLoadNumber(load.loadNumber) }}</UBadge>
+          <UBadge v-if="load.truckSeq" variant="soft" color="info" class="tabular-nums">Truck {{ load.truckSeq }}/{{ load.trucksTotal }}</UBadge>
           <LoadStatusBadge :status="load.status" />
         </div>
         <p class="text-sm text-muted mt-1">Posted by {{ data?.shipper?.name }}</p>

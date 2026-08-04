@@ -40,10 +40,18 @@ const pickupCents = computed(() =>
 const deliveryCents = computed(() =>
   deliveryWaiting.value ? liveAccrual(props.load.arrivedDeliveryAt) : props.load.deliveryDetentionCents)
 
+// Price-less internal loads have nothing to total — show a dash, not $0.00.
+const hasAnyCharge = computed(() =>
+  props.load.finalPriceCents != null
+  || props.load.pickupDetentionCents != null
+  || props.load.deliveryDetentionCents != null)
+
 const totalCents = computed(() =>
-  (props.load.finalPriceCents ?? 0)
-  + (props.load.pickupDetentionCents ?? 0)
-  + (props.load.deliveryDetentionCents ?? 0))
+  hasAnyCharge.value
+    ? (props.load.finalPriceCents ?? 0)
+      + (props.load.pickupDetentionCents ?? 0)
+      + (props.load.deliveryDetentionCents ?? 0)
+    : null)
 </script>
 
 <template>

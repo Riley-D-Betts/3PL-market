@@ -28,7 +28,7 @@ async function makePostedLoad(): Promise<Load> {
     deliveryCity: 'Nampa',
     deliveryState: 'ID',
     materialType: 'steel',
-    weightKg: 12000,
+    weightLbs: 12000,
     pickupWindowStart: new Date(Date.now() + 86400_000),
     pickupWindowEnd: new Date(Date.now() + 2 * 86400_000),
     askingPriceCents: 90000,

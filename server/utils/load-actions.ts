@@ -271,12 +271,19 @@ export async function instantAccept(opts: { user: ActorLike, company: Company, l
       .set({ status: 'rejected', updatedAt: now })
       .where(and(eq(bids.loadId, updated.id), eq(bids.status, 'pending')))
 
+    // Only marketplace loads can be posted, and those always carry a price
+    // (DB check) — this guard exists for the type system, not for runtime.
+    const priceCents = updated.askingPriceCents
+    if (priceCents == null) {
+      throw createError({ statusCode: 409, statusMessage: 'Load has no asking price' })
+    }
+
     const [syntheticBid] = await tx.insert(bids)
       .values({
         loadId: updated.id,
         companyId: opts.company.id,
         createdBy: opts.user.id,
-        amountCents: updated.askingPriceCents,
+        amountCents: priceCents,
         note: 'Instant accept at asking price',
         status: 'accepted',
         detentionFreeMinutes: opts.terms.detentionFreeMinutes,
@@ -294,7 +301,7 @@ export async function instantAccept(opts: { user: ActorLike, company: Company, l
       payload: {
         instantAccept: true,
         companyId: opts.company.id,
-        amountCents: updated.askingPriceCents,
+        amountCents: priceCents,
         detentionFreeMinutes: opts.terms.detentionFreeMinutes,
         detentionRatePerHourCents: opts.terms.detentionRatePerHourCents,
       },

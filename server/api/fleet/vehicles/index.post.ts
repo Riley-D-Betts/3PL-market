@@ -7,9 +7,13 @@ export default defineEventHandler(async (event) => {
       companyId: company.id,
       type: body.type,
       plate: body.plate,
-      capacityKg: body.capacityKg,
+      capacityLbs: body.capacityLbs,
       status: body.status,
       notes: body.notes ?? null,
+      insurancePolicy: body.insurancePolicy ?? null,
+      insuranceExpiresAt: body.insuranceExpiresAt ?? null,
+      nextServiceDueAt: body.nextServiceDueAt ?? null,
+      odometerMi: body.odometerMi ?? null,
     }).returning()
     setResponseStatus(event, 201)
     return { vehicle }

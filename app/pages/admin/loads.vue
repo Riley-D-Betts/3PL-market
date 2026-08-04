@@ -35,7 +35,7 @@ const statusItems = [
             </p>
             <p class="text-sm text-muted mt-0.5">
               {{ load.shipperName ?? load.externalShipperName }}<span v-if="load.carrierName"> → {{ load.carrierName }}</span>
-              · {{ MATERIAL_TYPE_LABELS[load.materialType] }} · {{ formatWeight(load.weightKg) }}
+              · {{ MATERIAL_TYPE_LABELS[load.materialType] }} · {{ formatWeight(load.weightLbs) }}
               · {{ formatDate(load.createdAt) }}
             </p>
           </div>

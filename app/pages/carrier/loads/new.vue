@@ -11,18 +11,23 @@ const { data: vehicleData } = await useFetch('/api/fleet/vehicles', { server: fa
 const state = reactive({
   externalShipperName: '',
   externalShipperPhone: '',
+  pickupLocationName: '',
   pickupAddress: '',
   pickupCity: '',
   pickupState: '',
+  jobName: '',
   deliveryAddress: '',
   deliveryCity: '',
   deliveryState: '',
   materialType: 'aggregate' as MaterialType,
   materialDescription: '',
-  weightKg: null as number | null,
+  weightLbs: null as number | null,
   quantity: '',
+  notes: '',
+  trucksRequested: 1,
   pickupWindowStart: '',
   pickupWindowEnd: '',
+  travelTimeAllowanceMin: null as number | null,
   price: null as number | null,
   pickupContactName: '',
   pickupContactPhone: '',
@@ -33,6 +38,9 @@ const state = reactive({
 })
 const pending = ref(false)
 const error = ref<string | null>(null)
+
+const pickupPin = usePinnedAddress(toRef(state, 'pickupAddress'))
+const deliveryPin = usePinnedAddress(toRef(state, 'deliveryAddress'))
 
 const materialItems = MATERIAL_TYPES.map(m => ({ label: MATERIAL_TYPE_LABELS[m], value: m }))
 const driverItems = computed(() => [
@@ -54,24 +62,34 @@ async function submit() {
   error.value = null
   pending.value = true
   try {
-    const { load } = await $fetch('/api/carrier/loads', {
+    const { load, loads: created } = await $fetch('/api/carrier/loads', {
       method: 'POST',
       body: {
         externalShipperName: state.externalShipperName,
         externalShipperPhone: state.externalShipperPhone || undefined,
+        pickupLocationName: state.pickupLocationName || undefined,
         pickupAddress: state.pickupAddress,
         pickupCity: state.pickupCity,
         pickupState: state.pickupState,
+        jobName: state.jobName || undefined,
         deliveryAddress: state.deliveryAddress,
         deliveryCity: state.deliveryCity,
         deliveryState: state.deliveryState,
+        pickupLat: pickupPin?.value?.lat,
+        pickupLng: pickupPin?.value?.lng,
+        deliveryLat: deliveryPin?.value?.lat,
+        deliveryLng: deliveryPin?.value?.lng,
         materialType: state.materialType,
         materialDescription: state.materialDescription || undefined,
-        weightKg: state.weightKg,
+        weightLbs: state.weightLbs,
         quantity: state.quantity || undefined,
+        notes: state.notes || undefined,
+        trucksRequested: state.trucksRequested || 1,
         pickupWindowStart: state.pickupWindowStart ? new Date(state.pickupWindowStart).toISOString() : undefined,
         pickupWindowEnd: state.pickupWindowEnd ? new Date(state.pickupWindowEnd).toISOString() : undefined,
-        priceCents: state.price != null ? Math.round(state.price * 100) : undefined,
+        // A cleared number input holds '' (not null) — typeof guards treat it as absent.
+        travelTimeAllowanceMin: typeof state.travelTimeAllowanceMin === 'number' ? state.travelTimeAllowanceMin : undefined,
+        priceCents: typeof state.price === 'number' ? Math.round(state.price * 100) : undefined,
         pickupContactName: state.pickupContactName || undefined,
         pickupContactPhone: state.pickupContactPhone || undefined,
         deliveryContactName: state.deliveryContactName || undefined,
@@ -80,7 +98,7 @@ async function submit() {
         vehicleId: state.vehicleId,
       },
     })
-    await navigateTo(`/carrier/loads/${load.id}`)
+    await navigateTo(created.length > 1 ? '/carrier/loads' : `/carrier/loads/${load.id}`)
   }
   catch (err) {
     error.value = apiErrorMessage(err)
@@ -116,10 +134,17 @@ async function submit() {
       <UCard>
         <template #header>
           <h2 class="font-semibold text-highlighted">Route</h2>
+          <p class="text-sm text-muted mt-1">Tip: drag a Google Maps pin (or paste its link) into an address field to set the exact spot.</p>
         </template>
         <div class="grid gap-4 sm:grid-cols-2">
+          <UFormField label="Pickup location name" class="sm:col-span-2">
+            <UInput v-model="state.pickupLocationName" placeholder="Pit 4 — Locust Grove yard" class="w-full" />
+          </UFormField>
           <UFormField label="Pickup address" required class="sm:col-span-2">
             <UInput v-model="state.pickupAddress" class="w-full" required />
+            <p v-if="pickupPin" class="text-xs text-success mt-1">
+              <UIcon name="i-lucide-map-pin" class="size-3 inline" /> Pin captured — {{ pickupPin.lat.toFixed(5) }}, {{ pickupPin.lng.toFixed(5) }}
+            </p>
           </UFormField>
           <UFormField label="Pickup city" required>
             <UInput v-model="state.pickupCity" class="w-full" required />
@@ -127,8 +152,14 @@ async function submit() {
           <UFormField label="Pickup state" required>
             <UInput v-model="state.pickupState" placeholder="ID" class="w-full" required />
           </UFormField>
+          <UFormField label="Job name" class="sm:col-span-2">
+            <UInput v-model="state.jobName" placeholder="Costco site — Meridian" class="w-full" />
+          </UFormField>
           <UFormField label="Delivery address" required class="sm:col-span-2">
             <UInput v-model="state.deliveryAddress" class="w-full" required />
+            <p v-if="deliveryPin" class="text-xs text-success mt-1">
+              <UIcon name="i-lucide-map-pin" class="size-3 inline" /> Pin captured — {{ deliveryPin.lat.toFixed(5) }}, {{ deliveryPin.lng.toFixed(5) }}
+            </p>
           </UFormField>
           <UFormField label="Delivery city" required>
             <UInput v-model="state.deliveryCity" class="w-full" required />
@@ -159,8 +190,8 @@ async function submit() {
           <UFormField label="Material" required>
             <USelect v-model="state.materialType" :items="materialItems" class="w-full" />
           </UFormField>
-          <UFormField label="Weight (kg)" required>
-            <UInput v-model.number="state.weightKg" type="number" min="1" class="w-full" required />
+          <UFormField label="Weight (lbs)" required hint="Per truck">
+            <UInput v-model.number="state.weightLbs" type="number" min="1" class="w-full" required />
           </UFormField>
           <UFormField label="Quantity">
             <UInput v-model="state.quantity" class="w-full" />
@@ -168,14 +199,23 @@ async function submit() {
           <UFormField label="Description">
             <UInput v-model="state.materialDescription" class="w-full" />
           </UFormField>
-          <UFormField label="Pickup window opens" required>
+          <UFormField label="Notes / instructions" hint="Gates, tarps, scale tickets…" class="sm:col-span-2">
+            <UTextarea v-model="state.notes" :rows="3" class="w-full" />
+          </UFormField>
+          <UFormField label="First load time" required>
             <UInput v-model="state.pickupWindowStart" type="datetime-local" class="w-full" required />
           </UFormField>
-          <UFormField label="Pickup window closes" required>
+          <UFormField label="Last load time" required>
             <UInput v-model="state.pickupWindowEnd" type="datetime-local" class="w-full" required />
           </UFormField>
-          <UFormField label="Agreed price (USD)" required>
-            <UInput v-model.number="state.price" type="number" min="1" step="0.01" class="w-full" required>
+          <UFormField label="Trucks" required hint="Creates one load per truck">
+            <UInput v-model.number="state.trucksRequested" type="number" min="1" max="50" class="w-full" required />
+          </UFormField>
+          <UFormField label="Travel time allowance (minutes)">
+            <UInput v-model.number="state.travelTimeAllowanceMin" type="number" min="0" max="1440" class="w-full" />
+          </UFormField>
+          <UFormField label="Agreed price (USD)" hint="Optional — internal work needs no rate">
+            <UInput v-model.number="state.price" type="number" min="1" step="0.01" class="w-full">
               <template #leading>$</template>
             </UInput>
           </UFormField>
@@ -185,6 +225,9 @@ async function submit() {
       <UCard>
         <template #header>
           <h2 class="font-semibold text-highlighted">Dispatch</h2>
+          <p v-if="state.trucksRequested > 1" class="text-sm text-muted mt-1">
+            With multiple trucks, the picked driver takes truck 1 — the rest land in the Unassigned lane.
+          </p>
         </template>
         <div class="grid gap-4 sm:grid-cols-2">
           <UFormField label="Driver" hint="Or assign later from the load page">
@@ -197,7 +240,9 @@ async function submit() {
       </UCard>
 
       <UAlert v-if="error" color="error" variant="subtle" :description="error" />
-      <UButton type="submit" :loading="pending" icon="i-lucide-plus">Add load</UButton>
+      <UButton type="submit" :loading="pending" icon="i-lucide-plus">
+        {{ state.trucksRequested > 1 ? `Add ${state.trucksRequested} loads` : 'Add load' }}
+      </UButton>
     </form>
   </div>
 </template>

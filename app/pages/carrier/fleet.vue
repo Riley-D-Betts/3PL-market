@@ -13,13 +13,13 @@ const editingId = ref<string | null>(null)
 const form = reactive({
   type: 'flatbed' as VehicleType,
   plate: '',
-  capacityKg: null as number | null,
+  capacityLbs: null as number | null,
   status: 'active' as VehicleStatus,
   notes: '',
   insurancePolicy: '',
   insuranceExpiresAt: '',
   nextServiceDueAt: '',
-  odometerKm: null as number | null,
+  odometerMi: null as number | null,
 })
 const acting = ref(false)
 
@@ -48,13 +48,13 @@ function startCreate() {
   Object.assign(form, {
     type: 'flatbed',
     plate: '',
-    capacityKg: null,
+    capacityLbs: null,
     status: 'active',
     notes: '',
     insurancePolicy: '',
     insuranceExpiresAt: '',
     nextServiceDueAt: '',
-    odometerKm: null,
+    odometerMi: null,
   })
   showForm.value = true
 }
@@ -64,13 +64,13 @@ function startEdit(vehicle: NonNullable<typeof data.value>['vehicles'][number]) 
   Object.assign(form, {
     type: vehicle.type,
     plate: vehicle.plate,
-    capacityKg: vehicle.capacityKg,
+    capacityLbs: vehicle.capacityLbs,
     status: vehicle.status,
     notes: vehicle.notes ?? '',
     insurancePolicy: vehicle.insurancePolicy ?? '',
     insuranceExpiresAt: toDateField(vehicle.insuranceExpiresAt),
     nextServiceDueAt: toDateField(vehicle.nextServiceDueAt),
-    odometerKm: vehicle.odometerKm,
+    odometerMi: vehicle.odometerMi,
   })
   showForm.value = true
 }
@@ -81,7 +81,7 @@ async function submit() {
     const base = {
       type: form.type,
       plate: form.plate,
-      capacityKg: form.capacityKg,
+      capacityLbs: form.capacityLbs,
       status: form.status,
     }
     if (editingId.value) {
@@ -93,7 +93,8 @@ async function submit() {
           insurancePolicy: form.insurancePolicy || null,
           insuranceExpiresAt: form.insuranceExpiresAt || null,
           nextServiceDueAt: form.nextServiceDueAt || null,
-          odometerKm: form.odometerKm ?? null,
+          // A cleared number input holds '' — treat anything non-numeric as clearing.
+          odometerMi: typeof form.odometerMi === 'number' ? form.odometerMi : null,
         },
       })
     }
@@ -106,7 +107,7 @@ async function submit() {
           insurancePolicy: form.insurancePolicy || undefined,
           insuranceExpiresAt: form.insuranceExpiresAt || undefined,
           nextServiceDueAt: form.nextServiceDueAt || undefined,
-          odometerKm: form.odometerKm ?? undefined,
+          odometerMi: typeof form.odometerMi === 'number' ? form.odometerMi : undefined,
         },
       })
     }
@@ -135,8 +136,8 @@ async function remove(id: string) {
 
 // ── Maintenance log (per-vehicle expand) ────────────────────────────────────
 const openLogVehicle = ref<string | null>(null)
-const logs = ref<{ id: string, performedAt: string, description: string, costCents: number | null, odometerKm: number | null }[]>([])
-const logForm = reactive({ performedAt: new Date().toISOString().slice(0, 10), description: '', cost: null as number | null, odometerKm: null as number | null })
+const logs = ref<{ id: string, performedAt: string, description: string, costCents: number | null, odometerMi: number | null }[]>([])
+const logForm = reactive({ performedAt: new Date().toISOString().slice(0, 10), description: '', cost: null as number | null, odometerMi: null as number | null })
 const logActing = ref(false)
 
 async function toggleLogs(vehicleId: string) {
@@ -159,13 +160,13 @@ async function addLog() {
       body: {
         performedAt: logForm.performedAt,
         description: logForm.description,
-        costCents: logForm.cost != null ? Math.round(logForm.cost * 100) : undefined,
-        odometerKm: logForm.odometerKm ?? undefined,
+        costCents: typeof logForm.cost === 'number' ? Math.round(logForm.cost * 100) : undefined,
+        odometerMi: typeof logForm.odometerMi === 'number' ? logForm.odometerMi : undefined,
       },
     })
     const res = await $fetch(`/api/fleet/vehicles/${openLogVehicle.value}/maintenance`)
     logs.value = res.logs
-    Object.assign(logForm, { description: '', cost: null, odometerKm: null })
+    Object.assign(logForm, { description: '', cost: null, odometerMi: null })
     await refresh()
     toast.add({ title: 'Maintenance logged', color: 'success' })
   }
@@ -207,8 +208,8 @@ async function removeLog(logId: string) {
         <UFormField label="Plate" required>
           <UInput v-model="form.plate" class="w-full" required />
         </UFormField>
-        <UFormField label="Capacity (kg)" required>
-          <UInput v-model.number="form.capacityKg" type="number" min="1" class="w-full" required />
+        <UFormField label="Capacity (lbs)" required>
+          <UInput v-model.number="form.capacityLbs" type="number" min="1" class="w-full" required />
         </UFormField>
         <UFormField label="Status" required>
           <USelect v-model="form.status" :items="statusItems" class="w-full" />
@@ -222,8 +223,8 @@ async function removeLog(logId: string) {
         <UFormField label="Next service due">
           <UInput v-model="form.nextServiceDueAt" type="date" class="w-full" />
         </UFormField>
-        <UFormField label="Odometer (km)">
-          <UInput v-model.number="form.odometerKm" type="number" min="0" class="w-full" />
+        <UFormField label="Odometer (mi)">
+          <UInput v-model.number="form.odometerMi" type="number" min="0" class="w-full" />
         </UFormField>
         <UFormField label="Notes" class="sm:col-span-2">
           <UInput v-model="form.notes" class="w-full" />
@@ -247,8 +248,8 @@ async function removeLog(logId: string) {
           <div class="flex-1 min-w-48">
             <p class="font-medium text-highlighted">{{ VEHICLE_TYPE_LABELS[vehicle.type] }} · {{ vehicle.plate }}</p>
             <p class="text-sm text-muted mt-0.5">
-              Capacity {{ formatWeight(vehicle.capacityKg) }}
-              <span v-if="vehicle.odometerKm != null"> · {{ vehicle.odometerKm.toLocaleString('en-US') }} km</span>
+              Capacity {{ formatWeight(vehicle.capacityLbs) }}
+              <span v-if="vehicle.odometerMi != null"> · {{ vehicle.odometerMi.toLocaleString('en-US') }} mi</span>
               <span v-if="vehicle.notes"> · {{ vehicle.notes }}</span>
             </p>
             <p class="text-sm text-muted mt-0.5 flex flex-wrap items-center gap-1.5">
@@ -284,7 +285,7 @@ async function removeLog(logId: string) {
               <span>
                 <span class="text-muted tabular-nums">{{ formatDate(log.performedAt) }}</span>
                 · {{ log.description }}
-                <span v-if="log.odometerKm != null" class="text-muted"> · {{ log.odometerKm.toLocaleString('en-US') }} km</span>
+                <span v-if="log.odometerMi != null" class="text-muted"> · {{ log.odometerMi.toLocaleString('en-US') }} mi</span>
               </span>
               <span class="flex items-center gap-2 shrink-0">
                 <span v-if="log.costCents != null" class="tabular-nums font-medium">{{ formatCents(log.costCents) }}</span>
@@ -302,8 +303,8 @@ async function removeLog(logId: string) {
             <UFormField label="Cost ($)" size="sm">
               <UInput v-model.number="logForm.cost" type="number" min="0" step="0.01" size="sm" class="w-24" />
             </UFormField>
-            <UFormField label="Odometer (km)" size="sm">
-              <UInput v-model.number="logForm.odometerKm" type="number" min="0" size="sm" class="w-28" />
+            <UFormField label="Odometer (mi)" size="sm">
+              <UInput v-model.number="logForm.odometerMi" type="number" min="0" size="sm" class="w-28" />
             </UFormField>
             <UButton type="submit" size="sm" :loading="logActing">Log</UButton>
           </form>

@@ -31,6 +31,8 @@ const { data, pending, error } = await useFetch('/api/carrier/loads')
                 {{ load.pickupCity }}, {{ load.pickupState }}
                 <UIcon name="i-lucide-arrow-right" class="size-4 inline text-muted" />
                 {{ load.deliveryCity }}, {{ load.deliveryState }}
+                <span v-if="load.truckSeq" class="text-muted font-normal text-sm tabular-nums">· truck {{ load.truckSeq }}/{{ load.trucksTotal }}</span>
+                <span v-if="load.jobName" class="text-muted font-normal text-sm">· {{ load.jobName }}</span>
                 <UBadge v-if="load.source === 'manual'" variant="subtle" color="neutral" size="sm" class="ml-1">external</UBadge>
               </p>
               <p class="text-sm text-muted mt-0.5">

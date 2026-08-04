@@ -36,6 +36,27 @@
       "when": 1785864701040,
       "tag": "0004_glamorous_gideon",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1785868328682,
+      "tag": "0005_free_ted_forrester",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1785868352289,
+      "tag": "0006_lumpy_titanium_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1785868386048,
+      "tag": "0007_abandoned_doctor_spectrum",
+      "breakpoints": true
     }
   ]
 }

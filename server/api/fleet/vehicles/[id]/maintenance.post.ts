@@ -18,13 +18,13 @@ export default defineEventHandler(async (event) => {
     performedAt: body.performedAt,
     description: body.description,
     costCents: body.costCents ?? null,
-    odometerKm: body.odometerKm ?? null,
+    odometerMi: body.odometerMi ?? null,
   }).returning()
 
   // A logged service with a reading also advances the vehicle odometer.
-  if (body.odometerKm && (!vehicle.odometerKm || body.odometerKm > vehicle.odometerKm)) {
+  if (body.odometerMi && (!vehicle.odometerMi || body.odometerMi > vehicle.odometerMi)) {
     await db.update(vehicles)
-      .set({ odometerKm: body.odometerKm, updatedAt: new Date() })
+      .set({ odometerMi: body.odometerMi, updatedAt: new Date() })
       .where(eq(vehicles.id, id))
   }
 

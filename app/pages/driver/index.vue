@@ -33,7 +33,7 @@ const past = computed(() => (data.value?.loads ?? []).filter(l => !['awarded', '
                 {{ load.deliveryCity }}, {{ load.deliveryState }}
               </p>
               <p class="text-sm text-muted mt-0.5">
-                {{ MATERIAL_TYPE_LABELS[load.materialType] }} · {{ formatWeight(load.weightKg) }}
+                {{ MATERIAL_TYPE_LABELS[load.materialType] }} · {{ formatWeight(load.weightLbs) }}
                 · pickup {{ formatDateTime(load.pickupWindowStart) }}
                 <span v-if="load.vehiclePlate"> · {{ load.vehiclePlate }}</span>
               </p>

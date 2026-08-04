@@ -97,14 +97,14 @@ export const vehicles = pgTable(
       .references(() => companies.id, { onDelete: 'cascade' }),
     type: vehicleTypeEnum('type').notNull(),
     plate: text('plate').notNull(),
-    capacityKg: integer('capacity_kg').notNull(),
+    capacityLbs: integer('capacity_lbs').notNull(),
     status: vehicleStatusEnum('status').notNull().default('active'),
     notes: text('notes'),
     // Ops tracking — all optional.
     insurancePolicy: text('insurance_policy'),
     insuranceExpiresAt: timestamp('insurance_expires_at', { withTimezone: true }),
     nextServiceDueAt: timestamp('next_service_due_at', { withTimezone: true }),
-    odometerKm: integer('odometer_km'),
+    odometerMi: integer('odometer_mi'),
     ...timestamps,
   },
   table => [
@@ -123,7 +123,7 @@ export const vehicleMaintenanceLogs = pgTable(
     performedAt: timestamp('performed_at', { withTimezone: true }).notNull(),
     description: text('description').notNull(),
     costCents: integer('cost_cents'),
-    odometerKm: integer('odometer_km'),
+    odometerMi: integer('odometer_mi'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   table => [index('vehicle_maintenance_vehicle_idx').on(table.vehicleId, table.performedAt)],
@@ -142,17 +142,24 @@ export const loads = pgTable(
     externalShipperName: text('external_shipper_name'),
     externalShipperPhone: text('external_shipper_phone'),
 
+    /** What the pickup spot is called on site — "Pit 4", "North yard". */
+    pickupLocationName: text('pickup_location_name'),
     pickupAddress: text('pickup_address').notNull(),
     pickupCity: text('pickup_city').notNull(),
     pickupState: text('pickup_state').notNull(),
     pickupLat: doublePrecision('pickup_lat'),
     pickupLng: doublePrecision('pickup_lng'),
 
+    /** The job/project the delivery belongs to — "Costco site, Meridian". */
+    jobName: text('job_name'),
     deliveryAddress: text('delivery_address').notNull(),
     deliveryCity: text('delivery_city').notNull(),
     deliveryState: text('delivery_state').notNull(),
     deliveryLat: doublePrecision('delivery_lat'),
     deliveryLng: doublePrecision('delivery_lng'),
+
+    /** Free-form instructions for the carrier/driver — gates, tarps, scale tickets. */
+    notes: text('notes'),
 
     // On-site contacts — visible to the assigned carrier and driver only.
     pickupContactName: text('pickup_contact_name'),
@@ -162,13 +169,25 @@ export const loads = pgTable(
 
     materialType: materialTypeEnum('material_type').notNull(),
     materialDescription: text('material_description'),
-    weightKg: integer('weight_kg').notNull(),
+    weightLbs: integer('weight_lbs').notNull(),
     quantity: text('quantity'),
 
     pickupWindowStart: timestamp('pickup_window_start', { withTimezone: true }).notNull(),
     pickupWindowEnd: timestamp('pickup_window_end', { withTimezone: true }).notNull(),
 
-    askingPriceCents: integer('asking_price_cents').notNull(),
+    /** Paid travel time built into the rate, shown to both parties. */
+    travelTimeAllowanceMin: integer('travel_time_allowance_min'),
+
+    /**
+     * Multi-truck requests: posting with N trucks creates N sibling loads
+     * (one per truck) sharing a group id, shown as "Truck seq of total".
+     */
+    truckGroupId: uuid('truck_group_id'),
+    truckSeq: integer('truck_seq'),
+    trucksTotal: integer('trucks_total'),
+
+    /** Null only on manual loads a carrier tracks without pricing. */
+    askingPriceCents: integer('asking_price_cents'),
     finalPriceCents: integer('final_price_cents'),
     currency: char('currency', { length: 3 }).notNull().default('USD'),
 
@@ -203,9 +222,13 @@ export const loads = pgTable(
     index('loads_shipper_idx').on(table.shipperId),
     index('loads_assigned_company_idx').on(table.assignedCompanyId),
     index('loads_assigned_driver_idx').on(table.assignedDriverId),
+    index('loads_truck_group_idx').on(table.truckGroupId),
     check('loads_pickup_window_check', sql`${table.pickupWindowStart} <= ${table.pickupWindowEnd}`),
-    check('loads_asking_price_check', sql`${table.askingPriceCents} > 0`),
-    check('loads_weight_check', sql`${table.weightKg} > 0`),
+    // NULL-safe: a bare `price > 0 OR ...` yields NULL for a priceless
+    // marketplace row, and Postgres CHECKs treat NULL as satisfied.
+    check('loads_asking_price_check', sql`(${table.askingPriceCents} IS NULL OR ${table.askingPriceCents} > 0) AND (${table.askingPriceCents} IS NOT NULL OR ${table.source} = 'manual')`),
+    check('loads_truck_group_check', sql`(${table.truckGroupId} IS NULL) = (${table.truckSeq} IS NULL) AND (${table.truckGroupId} IS NULL) = (${table.trucksTotal} IS NULL)`),
+    check('loads_weight_check', sql`${table.weightLbs} > 0`),
     check('loads_manual_shipper_check', sql`(${table.source} = 'manual') = (${table.shipperId} IS NULL)`),
   ],
 )
