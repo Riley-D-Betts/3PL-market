@@ -106,7 +106,7 @@ const mapPoints = computed(() => {
 
     <UCard>
       <LoadRouteSummary :load="load" />
-      <LoadMap class="mt-4" :points="mapPoints" />
+      <LoadMap class="mt-4" :points="mapPoints" :route="data?.route" />
     </UCard>
 
     <UCard v-if="load.status === 'posted'">

@@ -167,6 +167,17 @@ export const nextLoadsQuerySchema = z.object({
   vehicleId: z.uuid().optional(),
 })
 
+export const routeEstimateSchema = z.object({
+  pickupCity: z.string().trim().min(1).max(100),
+  pickupState: z.string().trim().min(1).max(50),
+  deliveryCity: z.string().trim().min(1).max(100),
+  deliveryState: z.string().trim().min(1).max(50),
+  pickupLat: z.coerce.number().min(-90).max(90).optional(),
+  pickupLng: z.coerce.number().min(-180).max(180).optional(),
+  deliveryLat: z.coerce.number().min(-90).max(90).optional(),
+  deliveryLng: z.coerce.number().min(-180).max(180).optional(),
+})
+
 export const awardSchema = z.object({
   bidId: z.uuid(),
 })

@@ -86,6 +86,7 @@ export const EVENT_TYPE_LABELS: Record<string, string> = {
   completed: 'Delivery confirmed',
   cancelled: 'Cancelled',
   note: 'Note',
+  invoiced: 'Invoice sent',
 }
 
 /** Human load reference: L-1042. */

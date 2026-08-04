@@ -359,6 +359,43 @@ console.log('\n8f. multi-truck marketplace request')
   }
 }
 
+console.log('\n8g. directions & invoicing')
+{
+  // Drive-time estimate — network-dependent (public OSRM), so tolerate absence.
+  const { data: est } = await shipper('/api/route-estimate?pickupCity=Boise&pickupState=ID&deliveryCity=Nampa&deliveryState=ID', { expect: 200 })
+  if (est.estimate) {
+    check('route estimate returns drive time and road miles', est.estimate.durationMin > 5 && est.estimate.miles > 10)
+  }
+  else {
+    console.log('  --   OSRM unreachable — drive-time estimate skipped')
+  }
+
+  // The section-7 load is completed with carrier2 assigned.
+  const { status: foreignInvoice } = await granite(`/api/loads/${loadId}/invoice`, { method: 'POST' })
+  check('non-assigned carrier cannot mark invoiced', foreignInvoice === 404)
+
+  const { data: graniteLoads } = await granite('/api/carrier/loads', { expect: 200 })
+  const unfinished = graniteLoads.loads.find(l => l.status === 'awarded')
+  if (unfinished) {
+    const { status: early } = await granite(`/api/loads/${unfinished.id}/invoice`, { method: 'POST' })
+    check('unfinished load cannot be invoiced (409)', early === 409)
+  }
+
+  const { data: marked } = await carrier2(`/api/loads/${loadId}/invoice`, { method: 'POST', expect: 200 })
+  check('assigned carrier marks the completed load invoiced', marked.load.invoicedAt !== null)
+  const { status: dup } = await carrier2(`/api/loads/${loadId}/invoice`, { method: 'POST' })
+  check('double-marking is refused with 409', dup === 409)
+
+  const { data: shipperView } = await shipper(`/api/loads/${loadId}`, { expect: 200 })
+  check('shipper sees the invoiced marking and timeline event',
+    shipperView.load.invoicedAt !== null && shipperView.events.some(e => e.eventType === 'invoiced'))
+
+  await carrier2(`/api/loads/${loadId}/invoice`, { method: 'DELETE', expect: 200 })
+  const { data: unmarked } = await carrier2(`/api/loads/${loadId}`, { expect: 200 })
+  check('invoiced marking can be undone', unmarked.load.invoicedAt === null)
+  await carrier2(`/api/loads/${loadId}/invoice`, { method: 'POST', expect: 200 })
+}
+
 console.log('\n9. demo mode (skipped when the flag is off)')
 {
   const probe = client()

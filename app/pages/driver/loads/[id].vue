@@ -134,7 +134,7 @@ async function act(path: string, success: string) {
 
     <UCard>
       <LoadRouteSummary :load="load" />
-      <LoadMap class="mt-4" :points="mapPoints" />
+      <LoadMap class="mt-4" :points="mapPoints" :route="data?.route" />
       <div class="mt-4 pt-4 border-t border-default text-sm">
         <p class="text-xs uppercase tracking-wide text-muted">Shipper contact</p>
         <p class="font-medium text-highlighted">{{ data?.shipper?.name }}</p>

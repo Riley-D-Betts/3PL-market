@@ -216,6 +216,9 @@ export const loads = pgTable(
     /** Actual hauled tonnage (short tons) the driver reports at delivery. */
     deliveredTons: doublePrecision('delivered_tons'),
 
+    /** When the carrier marked this load's invoice as sent. */
+    invoicedAt: timestamp('invoiced_at', { withTimezone: true }),
+
     // Detention: terms copied from the winning bid at award; arrival stamps
     // recorded by the driver; fees frozen at the departure transitions.
     detentionFreeMinutes: integer('detention_free_minutes'),
@@ -320,6 +323,26 @@ export const geocodeCache = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   table => [uniqueIndex('geocode_cache_query_unique').on(table.query)],
+)
+
+/**
+ * Driving-route cache (OSRM results) keyed on the rounded coordinate pair.
+ * found=false rows suppress refetching unroutable pairs; transient network
+ * failures are never cached.
+ */
+export const routeCache = pgTable(
+  'route_cache',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    key: text('key').notNull(),
+    durationSec: integer('duration_sec'),
+    distanceMeters: integer('distance_meters'),
+    /** GeoJSON LineString coordinates ([lng, lat] pairs) for drawing the route. */
+    geometry: jsonb('geometry'),
+    found: boolean('found').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  table => [uniqueIndex('route_cache_key_unique').on(table.key)],
 )
 
 /** Carriers a shipper refuses to work with — hidden board, no bids/accepts. */

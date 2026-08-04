@@ -24,6 +24,7 @@ const EVENT_ICONS: Record<string, string> = {
   completed: 'i-lucide-check-circle-2',
   cancelled: 'i-lucide-ban',
   note: 'i-lucide-sticky-note',
+  invoiced: 'i-lucide-receipt',
 }
 
 function detail(event: TimelineEvent): string | null {
@@ -34,6 +35,8 @@ function detail(event: TimelineEvent): string | null {
   if (typeof p.detentionCents === 'number' && p.detentionCents > 0) {
     parts.push(`detention ${formatCents(p.detentionCents as number)}`)
   }
+  if (typeof p.invoiceNumber === 'string') parts.push(p.invoiceNumber)
+  if (typeof p.note === 'string' && p.note) parts.push(p.note)
   return parts.length ? parts.join(' · ') : null
 }
 </script>

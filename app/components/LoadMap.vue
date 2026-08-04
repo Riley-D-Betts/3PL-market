@@ -14,7 +14,14 @@ export interface MapPoint {
   label: string
 }
 
-const props = defineProps<{ points: MapPoint[] }>()
+export interface DriveRoute {
+  durationMin: number
+  miles: number
+  /** GeoJSON LineString coordinates — [lng, lat] pairs. */
+  geometry: [number, number][]
+}
+
+const props = defineProps<{ points: MapPoint[], route?: DriveRoute | null }>()
 
 const valid = computed(() =>
   props.points.filter((p): p is MapPoint & { lat: number, lng: number } =>
@@ -59,14 +66,30 @@ onMounted(async () => {
 
   const pickup = valid.value.find(p => p.kind === 'pickup')
   const delivery = valid.value.find(p => p.kind === 'delivery')
-  if (pickup && delivery) {
-    L.polyline([[pickup.lat, pickup.lng], [delivery.lat, delivery.lng]], {
-      color: '#f59e0b',
-      weight: 2.5,
-      dashArray: '6 8',
-      opacity: 0.8,
-    }).addTo(map)
+  // The real driving route when OSRM gave us one; a dashed as-the-crow-flies
+  // line otherwise. Redrawn if the route prop arrives after mount (lazy fetch).
+  let routeLayer: ReturnType<typeof L.polyline> | undefined
+  const drawRoute = () => {
+    if (!map) return
+    routeLayer?.remove()
+    if (props.route?.geometry?.length) {
+      routeLayer = L.polyline(props.route.geometry.map(([lng, lat]) => [lat, lng] as [number, number]), {
+        color: '#f59e0b',
+        weight: 3.5,
+        opacity: 0.85,
+      }).addTo(map)
+    }
+    else if (pickup && delivery) {
+      routeLayer = L.polyline([[pickup.lat, pickup.lng], [delivery.lat, delivery.lng]], {
+        color: '#f59e0b',
+        weight: 2.5,
+        dashArray: '6 8',
+        opacity: 0.8,
+      }).addTo(map)
+    }
   }
+  drawRoute()
+  watch(() => props.route, drawRoute)
 
   const bounds = L.latLngBounds(valid.value.map(p => [p.lat, p.lng] as [number, number]))
   map.fitBounds(bounds.pad(0.25), { maxZoom: 11 })
@@ -80,6 +103,11 @@ onUnmounted(() => {
 
 <template>
   <div v-if="valid.length" class="relative">
+    <p v-if="route" class="text-sm text-muted mb-2">
+      <UIcon name="i-lucide-route" class="size-3.5 inline" />
+      Drive ≈ <span class="font-medium text-highlighted">{{ formatMinutes(route.durationMin) }}</span>
+      · {{ formatMiles(route.miles) }} by road
+    </p>
     <div ref="container" class="h-72 w-full rounded-lg overflow-hidden border border-default z-0" />
     <div class="absolute bottom-2 left-2 z-[500] flex gap-2 rounded-md bg-white/90 dark:bg-black/70 px-2 py-1 text-xs shadow">
       <span class="flex items-center gap-1"><span class="inline-block size-2.5 rounded-full" style="background:#f59e0b" /> Pickup</span>

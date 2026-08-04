@@ -144,6 +144,15 @@ export default defineEventHandler(async (event) => {
     ? (shipper?.billingEmail ?? shipper?.email ?? null)
     : null
 
+  // Real driving route (OSRM, cached) when both stops have coordinates —
+  // powers the map polyline and the drive-time line. Best-effort.
+  const route = load.pickupLat !== null && load.pickupLng !== null && load.deliveryLat !== null && load.deliveryLng !== null
+    ? shapeRoute(await getDrivingRoute(
+        { lat: load.pickupLat, lng: load.pickupLng },
+        { lat: load.deliveryLat, lng: load.deliveryLng },
+      ))
+    : null
+
   // Manual loads: expose the free-text customer in place of a shipper account.
   const shipperInfo = shipper
     ? { id: shipper.id, name: shipper.name, phone: shipper.phone }
@@ -162,5 +171,6 @@ export default defineEventHandler(async (event) => {
     assignedDriver,
     assignedVehicle,
     attachments,
+    route,
   }
 })
