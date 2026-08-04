@@ -42,6 +42,16 @@ const error = ref<string | null>(null)
 const pickupPin = usePinnedAddress(toRef(state, 'pickupAddress'))
 const deliveryPin = usePinnedAddress(toRef(state, 'deliveryAddress'))
 
+// Live drive-time estimate (OSRM) once both stops are filled in.
+const driveEstimate = useRouteEstimate({
+  pickupCity: toRef(state, 'pickupCity'),
+  pickupState: toRef(state, 'pickupState'),
+  deliveryCity: toRef(state, 'deliveryCity'),
+  deliveryState: toRef(state, 'deliveryState'),
+  pickupPin,
+  deliveryPin,
+})
+
 const materialItems = MATERIAL_TYPES.map(m => ({ label: MATERIAL_TYPE_LABELS[m], value: m }))
 const driverItems = computed(() => [
   { label: 'Assign later', value: undefined },
@@ -213,6 +223,11 @@ async function submit() {
           </UFormField>
           <UFormField label="Travel time allowance (minutes)">
             <UInput v-model.number="state.travelTimeAllowanceMin" type="number" min="0" max="1440" class="w-full" />
+            <p v-if="driveEstimate" class="text-xs text-muted mt-1">
+              <UIcon name="i-lucide-route" class="size-3 inline" />
+              Estimated drive: {{ formatMinutes(driveEstimate.durationMin) }} · {{ formatMiles(driveEstimate.miles) }}
+              <UButton size="xs" variant="link" class="p-0" @click="state.travelTimeAllowanceMin = driveEstimate.durationMin">Use as allowance</UButton>
+            </p>
           </UFormField>
           <UFormField label="Agreed price (USD)" hint="Optional — internal work needs no rate">
             <UInput v-model.number="state.price" type="number" min="1" step="0.01" class="w-full">

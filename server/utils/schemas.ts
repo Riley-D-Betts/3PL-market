@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { LOAD_STATUSES, MATERIAL_TYPES, VEHICLE_STATUSES, VEHICLE_TYPES } from '../../shared/types'
+import { LOAD_STATUSES, MATERIAL_TYPES, PRETRIP_ITEMS, VEHICLE_STATUSES, VEHICLE_TYPES } from '../../shared/types'
 
 const email = z.email().max(320).transform(v => v.toLowerCase())
 const password = z.string().min(8).max(200)
@@ -167,6 +167,17 @@ export const nextLoadsQuerySchema = z.object({
   vehicleId: z.uuid().optional(),
 })
 
+export const routeEstimateSchema = z.object({
+  pickupCity: z.string().trim().min(1).max(100),
+  pickupState: z.string().trim().min(1).max(50),
+  deliveryCity: z.string().trim().min(1).max(100),
+  deliveryState: z.string().trim().min(1).max(50),
+  pickupLat: z.coerce.number().min(-90).max(90).optional(),
+  pickupLng: z.coerce.number().min(-180).max(180).optional(),
+  deliveryLat: z.coerce.number().min(-90).max(90).optional(),
+  deliveryLng: z.coerce.number().min(-180).max(180).optional(),
+})
+
 export const awardSchema = z.object({
   bidId: z.uuid(),
 })
@@ -180,7 +191,7 @@ export const vehicleInputSchema = z.object({
   insurancePolicy: z.string().trim().max(100).optional(),
   insuranceExpiresAt: dateInput.optional(),
   nextServiceDueAt: dateInput.optional(),
-  odometerMi: z.number().int().min(0).optional(),
+  odometerMi: z.number().int().min(0).max(2_000_000).optional(),
 })
 
 export const vehiclePatchSchema = z.object({
@@ -192,14 +203,14 @@ export const vehiclePatchSchema = z.object({
   insurancePolicy: z.string().trim().max(100).nullable().optional(),
   insuranceExpiresAt: dateInput.nullable().optional(),
   nextServiceDueAt: dateInput.nullable().optional(),
-  odometerMi: z.number().int().min(0).nullable().optional(),
+  odometerMi: z.number().int().min(0).max(2_000_000).nullable().optional(),
 })
 
 export const maintenanceLogSchema = z.object({
   performedAt: dateInput,
   description: z.string().trim().min(1).max(1000),
   costCents: z.number().int().min(0).optional(),
-  odometerMi: z.number().int().min(0).optional(),
+  odometerMi: z.number().int().min(0).max(2_000_000).optional(),
 })
 
 export const driverCreateSchema = z.object({
@@ -231,6 +242,30 @@ export const suspendSchema = z.object({
 
 export const loadsQuerySchema = z.object({
   status: z.enum(LOAD_STATUSES).optional(),
+})
+
+/** Sign-on: truck, begin mileage and the full pre-trip inspection. */
+export const shiftStartSchema = z.object({
+  vehicleId: z.uuid(),
+  startOdometerMi: z.number().int().min(0).max(2_000_000),
+  checklist: z.object(
+    Object.fromEntries(Object.keys(PRETRIP_ITEMS).map(k => [k, z.boolean()])) as Record<keyof typeof PRETRIP_ITEMS, z.ZodBoolean>,
+  ),
+  defects: z.string().trim().max(2000).optional(),
+}).refine(v => Object.values(v.checklist).every(Boolean) || (v.defects && v.defects.length > 0), {
+  message: 'Describe the defects for any unchecked inspection item',
+  path: ['defects'],
+})
+
+/** Sign-off: ending mileage and fuel burned. */
+export const shiftEndSchema = z.object({
+  endOdometerMi: z.number().int().min(0).max(2_000_000),
+  fuelGallons: z.number().min(0).max(1000),
+})
+
+/** Driver's delivery confirmation — actual hauled tonnage (short tons). */
+export const deliverSchema = z.object({
+  deliveredTons: z.number().positive().max(100),
 })
 
 export const boardQuerySchema = z.object({

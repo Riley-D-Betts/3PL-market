@@ -19,7 +19,7 @@ export type LoadStatus = (typeof LOAD_STATUSES)[number]
 export const BID_STATUSES = ['pending', 'accepted', 'rejected', 'withdrawn'] as const
 export type BidStatus = (typeof BID_STATUSES)[number]
 
-export const LOAD_EVENT_TYPES = ['created', 'posted', 'unposted', 'bid_placed', 'bid_withdrawn', 'awarded', 'driver_assigned', 'picked_up', 'delivered', 'completed', 'cancelled', 'note', 'arrived_pickup', 'arrived_delivery'] as const
+export const LOAD_EVENT_TYPES = ['created', 'posted', 'unposted', 'bid_placed', 'bid_withdrawn', 'awarded', 'driver_assigned', 'picked_up', 'delivered', 'completed', 'cancelled', 'note', 'arrived_pickup', 'arrived_delivery', 'invoiced'] as const
 export type LoadEventType = (typeof LOAD_EVENT_TYPES)[number]
 
 export const LOAD_SOURCES = ['marketplace', 'manual'] as const
@@ -37,3 +37,17 @@ export interface SessionUser {
 }
 
 // UI labels and formatters live in shared/utils/format.ts (auto-imported by Nuxt).
+
+/** Pre-trip inspection items a driver checks off before starting a shift. */
+export const PRETRIP_ITEMS = {
+  lights: 'Lights & reflectors',
+  tires: 'Tires & wheels',
+  brakes: 'Brakes (service & parking)',
+  steering: 'Steering & suspension',
+  fluids: 'Fluid levels & leaks',
+  mirrors: 'Mirrors, glass & wipers',
+  horn: 'Horn & backup alarm',
+  coupling: 'Coupling / tailgate / bed',
+  safety: 'Fire extinguisher & triangles',
+} as const
+export type PretripItem = keyof typeof PRETRIP_ITEMS

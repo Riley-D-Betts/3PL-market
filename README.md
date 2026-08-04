@@ -87,8 +87,9 @@ The driver's flow is **arrive → load → depart** at each stop: "Arrived at pi
 - **External loads**: carriers can enter freight booked outside the marketplace ("Add external load") — free-text customer, an *optional* agreed price (internal work needs no rate), optional immediate dispatch. It gets a load number and flows through the calendar, day board, driver arrive/pickup/deliver flow and reports exactly like a won load, but never appears on the board; the carrier admin confirms completion. This lets a 3PL run its whole operation here before the shipper side fills in.
 - **Insurance & maintenance**: vehicles track policy number, insurance expiry, next service due and odometer (mi) with expiring/overdue badges on the fleet page, plus a per-vehicle maintenance log (date, work, cost, odometer).
 - **Units**: all measures are imperial — weights in lbs (displayed in short tons), distances and odometers in miles.
-- **Maps**: every load detail page shows a Leaflet/OpenStreetMap route map with pickup and delivery pins; the carrier dispatch view also pins the assigned driver's **home base** (set per driver in the Drivers page) to help pick who's closest.
-- Coordinates come from best-effort **Nominatim geocoding** at load/driver save time, cached city-level in the database (the demo seed prefills real Idaho coordinates, so maps work offline). Missing coordinates degrade gracefully — the map simply doesn't render.
+- **Maps & directions**: every load detail page shows a Leaflet/OpenStreetMap route map with pickup and delivery pins — and when both stops have coordinates, the **actual driving route** from **OSRM** (OpenStreetMap's routing engine) is drawn on the map with a "Drive ≈ 34 min · 23 mi by road" line. The posting forms show the same estimate live with a one-click "use as travel time allowance". Routes are cached in the database; the carrier dispatch view also pins the assigned driver's **home base**.
+- Coordinates come from best-effort **Nominatim geocoding** at load/driver save time, cached city-level in the database (the demo seed prefills real Idaho coordinates, so maps work offline). Missing coordinates or an unreachable router degrade gracefully — straight-line distance and no drive estimate.
+- **Invoicing**: finished (delivered/completed) loads generate a **printable invoice** (`INV-L-###` — carrier letterhead, bill-to from the shipper's invoicing email or the external customer, line haul + detention line items, delivered tonnage) via the browser's Print → PDF, with an email shortcut. The carrier then **marks the load invoiced** (undoable, on the timeline, visible to the shipper); the Won-loads page filters by "Needs invoice" / "Invoiced".
 
 ### Posting a load, the jobsite way
 
@@ -98,6 +99,14 @@ The driver's flow is **arrive → load → depart** at each stop: "Arrived at pi
 - **Trucks requested**: a load is one truckload; asking for N trucks posts N sibling loads (badged "Truck 2/5") that carriers accept or bid on individually — same for carrier-entered external work, where the picked driver takes truck 1 and the rest land in the day board's Unassigned lane.
 - **First / last load time**: the pickup window is phrased the way dirt jobs run — first truck loads at, last truck loads by.
 - **Travel time allowance**: an optional paid-travel-time figure both parties see with the rate.
+
+### The driver's day
+
+- **Sign on**: before any load action, a driver starts a shift — pick a **truck** from the company fleet, complete a **pre-trip inspection checklist** (any failed item requires a defects note), and enter **beginning mileage**. Arrive/pickup/deliver actions are server-refused (409) until they're signed on.
+- **Navigate**: pickup and delivery addresses (and dropped pins) are clickable links straight into Google Maps.
+- **Deliver with paperwork**: marking a load delivered requires a **photo of the scale ticket** (uploaded from the phone camera, stored in Postgres, visible to the shipper and carrier on the load) and the **delivered tonnage** — recorded on the load and shown to both parties.
+- **Sign off**: logging out intercepts an active shift and requires **ending mileage** and **fuel usage**; mileage advances the truck's odometer, and the carrier sees every shift (truck, pre-trip result, miles, fuel, defects) in a Recent Shifts table on the Drivers page.
+- If dispatch never picked a truck for a load, pickup automatically attaches the shift's truck — so per-vehicle reports stay accurate.
 
 ### Blacklist, contacts & invoicing
 

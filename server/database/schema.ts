@@ -5,6 +5,7 @@ import {
   boolean,
   char,
   check,
+  customType,
   doublePrecision,
   index,
   integer,
@@ -16,6 +17,13 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core'
+
+/** Raw binary column — used for uploaded scale-ticket photos. */
+const bytea = customType<{ data: Buffer, notNull: false, default: false }>({
+  dataType() {
+    return 'bytea'
+  },
+})
 import {
   BID_STATUSES,
   COMPANY_STATUSES,
@@ -205,6 +213,12 @@ export const loads = pgTable(
     completedAt: timestamp('completed_at', { withTimezone: true }),
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
 
+    /** Actual hauled tonnage (short tons) the driver reports at delivery. */
+    deliveredTons: doublePrecision('delivered_tons'),
+
+    /** When the carrier marked this load's invoice as sent. */
+    invoicedAt: timestamp('invoiced_at', { withTimezone: true }),
+
     // Detention: terms copied from the winning bid at award; arrival stamps
     // recorded by the driver; fees frozen at the departure transitions.
     detentionFreeMinutes: integer('detention_free_minutes'),
@@ -311,6 +325,26 @@ export const geocodeCache = pgTable(
   table => [uniqueIndex('geocode_cache_query_unique').on(table.query)],
 )
 
+/**
+ * Driving-route cache (OSRM results) keyed on the rounded coordinate pair.
+ * found=false rows suppress refetching unroutable pairs; transient network
+ * failures are never cached.
+ */
+export const routeCache = pgTable(
+  'route_cache',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    key: text('key').notNull(),
+    durationSec: integer('duration_sec'),
+    distanceMeters: integer('distance_meters'),
+    /** GeoJSON LineString coordinates ([lng, lat] pairs) for drawing the route. */
+    geometry: jsonb('geometry'),
+    found: boolean('found').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  table => [uniqueIndex('route_cache_key_unique').on(table.key)],
+)
+
 /** Carriers a shipper refuses to work with — hidden board, no bids/accepts. */
 export const shipperCarrierBlocks = pgTable(
   'shipper_carrier_blocks',
@@ -331,6 +365,66 @@ export const shipperCarrierBlocks = pgTable(
   ],
 )
 
+/**
+ * A driver's working day: truck, pre-trip inspection and begin mileage at
+ * sign-on; ending mileage and fuel burn at sign-off. Load actions (arrive,
+ * pickup, deliver) require an active shift.
+ */
+export const driverShifts = pgTable(
+  'driver_shifts',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    driverId: uuid('driver_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    companyId: uuid('company_id')
+      .notNull()
+      .references(() => companies.id, { onDelete: 'cascade' }),
+    vehicleId: uuid('vehicle_id')
+      .notNull()
+      .references(() => vehicles.id),
+    startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
+    startOdometerMi: integer('start_odometer_mi').notNull(),
+    /** Checklist results keyed by PRETRIP_ITEMS: { lights: true, ... }. */
+    pretrip: jsonb('pretrip').notNull(),
+    pretripDefects: text('pretrip_defects'),
+    endedAt: timestamp('ended_at', { withTimezone: true }),
+    endOdometerMi: integer('end_odometer_mi'),
+    fuelGallons: doublePrecision('fuel_gallons'),
+  },
+  table => [
+    // One active (un-ended) shift per driver.
+    uniqueIndex('driver_shifts_active_unique').on(table.driverId).where(sql`${table.endedAt} IS NULL`),
+    index('driver_shifts_company_idx').on(table.companyId, table.startedAt),
+    check('driver_shifts_start_odometer_check', sql`${table.startOdometerMi} >= 0`),
+    check('driver_shifts_end_odometer_check', sql`${table.endOdometerMi} IS NULL OR ${table.endOdometerMi} >= ${table.startOdometerMi}`),
+    check('driver_shifts_fuel_check', sql`${table.fuelGallons} IS NULL OR ${table.fuelGallons} >= 0`),
+    // Ending data arrives together — mileage AND fuel are sign-off requirements.
+    check('driver_shifts_ended_check', sql`((${table.endedAt} IS NULL) = (${table.endOdometerMi} IS NULL)) AND ((${table.endedAt} IS NULL) = (${table.fuelGallons} IS NULL))`),
+  ],
+)
+
+/** Uploaded files attached to a load — today: delivery scale-ticket photos. */
+export const loadAttachments = pgTable(
+  'load_attachments',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    loadId: uuid('load_id')
+      .notNull()
+      .references(() => loads.id, { onDelete: 'cascade' }),
+    kind: text('kind').notNull().default('ticket'),
+    uploadedBy: uuid('uploaded_by')
+      .notNull()
+      .references(() => users.id),
+    contentType: text('content_type').notNull(),
+    filename: text('filename'),
+    sizeBytes: integer('size_bytes').notNull(),
+    data: bytea('data').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  table => [index('load_attachments_load_idx').on(table.loadId)],
+)
+
 export type Company = typeof companies.$inferSelect
 export type User = typeof users.$inferSelect
 export type Vehicle = typeof vehicles.$inferSelect
@@ -339,3 +433,5 @@ export type Bid = typeof bids.$inferSelect
 export type LoadEvent = typeof loadEvents.$inferSelect
 export type ShipperCarrierBlock = typeof shipperCarrierBlocks.$inferSelect
 export type VehicleMaintenanceLog = typeof vehicleMaintenanceLogs.$inferSelect
+export type DriverShift = typeof driverShifts.$inferSelect
+export type LoadAttachment = typeof loadAttachments.$inferSelect

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { eq, sql } from 'drizzle-orm'
 import type { Db } from './client'
-import { bids, companies, geocodeCache, loadEvents, loads, shipperCarrierBlocks, users, vehicleMaintenanceLogs, vehicles } from './schema'
+import { bids, companies, driverShifts, geocodeCache, loadAttachments, loadEvents, loads, shipperCarrierBlocks, users, vehicleMaintenanceLogs, vehicles } from './schema'
 import { hashUserPassword } from '../utils/password'
 
 export const SUPERADMIN_EMAIL = 'admin@3plmarket.test'
@@ -558,6 +558,7 @@ export async function seed(db: Db): Promise<boolean> {
       pickupDetentionCents: 8750,
       arrivedDeliveryAt: hours(-42 - 25 / 60),
       deliveryDetentionCents: 0,
+      deliveredTons: 8.7,
       status: 'delivered',
       assignedCompanyId: graniteId,
       assignedDriverId: driver1!.id,
@@ -585,7 +586,42 @@ export async function seed(db: Db): Promise<boolean> {
       { loadId: deliveredLoad!.id, actorUserId: driver1!.id, eventType: 'arrived_pickup', createdAt: hours(-46 - 190 / 60) },
       { loadId: deliveredLoad!.id, actorUserId: driver1!.id, eventType: 'picked_up', fromStatus: 'awarded', toStatus: 'picked_up', payload: { detentionMinutes: 70, detentionCents: 8750 }, createdAt: hours(-46) },
       { loadId: deliveredLoad!.id, actorUserId: driver1!.id, eventType: 'arrived_delivery', createdAt: hours(-42 - 25 / 60) },
-      { loadId: deliveredLoad!.id, actorUserId: driver1!.id, eventType: 'delivered', fromStatus: 'picked_up', toStatus: 'delivered', payload: { detentionMinutes: 0, detentionCents: 0 }, createdAt: hours(-42) },
+      { loadId: deliveredLoad!.id, actorUserId: driver1!.id, eventType: 'delivered', fromStatus: 'picked_up', toStatus: 'delivered', payload: { detentionMinutes: 0, detentionCents: 0, deliveredTons: 8.7 }, createdAt: hours(-42) },
+    ])
+
+    // The delivered load's scale ticket (a tiny placeholder PNG).
+    const ticketPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64')
+    await tx.insert(loadAttachments).values({
+      loadId: deliveredLoad!.id,
+      kind: 'ticket',
+      uploadedBy: driver1!.id,
+      contentType: 'image/png',
+      filename: 'scale-ticket.png',
+      sizeBytes: ticketPng.length,
+      data: ticketPng,
+      createdAt: hours(-42),
+    })
+
+    // Both demo drivers are signed on: truck, clean pre-trip, begin mileage.
+    const cleanPretrip = { lights: true, tires: true, brakes: true, steering: true, fluids: true, mirrors: true, horn: true, coupling: true, safety: true }
+    await tx.insert(driverShifts).values([
+      {
+        driverId: driver1!.id,
+        companyId: graniteId,
+        vehicleId: flatbed!.id,
+        startedAt: hours(-3),
+        startOdometerMi: 90200,
+        pretrip: cleanPretrip,
+      },
+      {
+        driverId: driver2!.id,
+        companyId: graniteId,
+        vehicleId: dumpTruck!.id,
+        startedAt: hours(-4),
+        startOdometerMi: 113300,
+        pretrip: { ...cleanPretrip, lights: false },
+        pretripDefects: 'Right rear marker light out — bulb on order',
+      },
     ])
   })
 

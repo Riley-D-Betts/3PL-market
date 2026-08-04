@@ -3,13 +3,39 @@ definePageMeta({ layout: 'dashboard', auth: { roles: ['carrier_admin'] } })
 useSeoMeta({ title: 'Won loads — 3PL Market' })
 
 const { data, pending, error } = await useFetch('/api/carrier/loads')
+
+const filter = ref<'all' | 'to_invoice' | 'invoiced'>('all')
+const filterItems = [
+  { label: 'All', value: 'all' },
+  { label: 'Needs invoice', value: 'to_invoice' },
+  { label: 'Invoiced', value: 'invoiced' },
+]
+
+// A load with no price and no detention has nothing to bill — internal
+// yard moves shouldn't nag for an invoice.
+function billable(l: { finalPriceCents: number | null, askingPriceCents: number | null, pickupDetentionCents: number | null, deliveryDetentionCents: number | null }): boolean {
+  return (l.finalPriceCents ?? l.askingPriceCents) != null
+    || !!l.pickupDetentionCents || !!l.deliveryDetentionCents
+}
+
+const filtered = computed(() => {
+  const rows = data.value?.loads ?? []
+  if (filter.value === 'to_invoice') {
+    return rows.filter(l => ['delivered', 'completed'].includes(l.status) && !l.invoicedAt && billable(l))
+  }
+  if (filter.value === 'invoiced') return rows.filter(l => l.invoicedAt)
+  return rows
+})
 </script>
 
 <template>
   <div>
     <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
       <h1 class="text-xl font-bold text-highlighted">Won loads</h1>
-      <UButton to="/carrier/loads/new" variant="outline" icon="i-lucide-plus">Add external load</UButton>
+      <div class="flex gap-2">
+        <USelect v-model="filter" :items="filterItems" class="w-40" />
+        <UButton to="/carrier/loads/new" variant="outline" icon="i-lucide-plus">Add external load</UButton>
+      </div>
     </div>
 
     <UAlert v-if="error" color="warning" variant="subtle" :description="apiErrorMessage(error)" />
@@ -21,8 +47,15 @@ const { data, pending, error } = await useFetch('/api/carrier/loads')
       <UButton to="/carrier/board" class="mt-4" icon="i-lucide-search">Browse the board</UButton>
     </UCard>
 
+    <UCard v-else-if="!pending && !filtered.length" class="text-center py-10">
+      <UIcon name="i-lucide-receipt" class="size-10 text-muted mx-auto" />
+      <p class="mt-3 font-medium text-highlighted">
+        {{ filter === 'to_invoice' ? 'Nothing waiting to be invoiced' : 'No invoiced loads yet' }}
+      </p>
+    </UCard>
+
     <div v-else class="space-y-3">
-      <NuxtLink v-for="load in data?.loads" :key="load.id" :to="`/carrier/loads/${load.id}`" class="block group">
+      <NuxtLink v-for="load in filtered" :key="load.id" :to="`/carrier/loads/${load.id}`" class="block group">
         <UCard class="transition-shadow group-hover:shadow-md">
           <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
             <div class="flex-1 min-w-48">
@@ -43,6 +76,8 @@ const { data, pending, error } = await useFetch('/api/carrier/loads')
               <UIcon name="i-lucide-user" class="size-3.5 inline" /> {{ load.driverName }}
             </p>
             <UBadge v-else-if="load.status === 'awarded'" color="warning" variant="soft">Needs driver</UBadge>
+            <UBadge v-if="load.invoicedAt" variant="subtle" color="success" size="sm" icon="i-lucide-receipt">invoiced</UBadge>
+            <UBadge v-else-if="['delivered', 'completed'].includes(load.status) && billable(load)" variant="subtle" color="warning" size="sm">needs invoice</UBadge>
             <p class="font-semibold text-highlighted tabular-nums">{{ formatCents(load.finalPriceCents) }}</p>
             <LoadStatusBadge :status="load.status" />
           </div>

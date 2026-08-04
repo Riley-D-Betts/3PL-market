@@ -81,6 +81,16 @@ const backOut = () => act(
   'Load cancelled',
 )
 
+const invoiceable = computed(() => load.value && ['delivered', 'completed'].includes(load.value.status))
+const markInvoiced = () => act(
+  () => $fetch(`/api/loads/${route.params.id}/invoice`, { method: 'POST' }),
+  'Marked invoiced',
+)
+const unmarkInvoiced = () => act(
+  () => $fetch(`/api/loads/${route.params.id}/invoice`, { method: 'DELETE' }),
+  'Invoiced marking removed',
+)
+
 // Next-leg planner: open loads near where this run ends, rated against the
 // selected vehicle. Advisory — refreshed when the vehicle selection changes.
 const plannerActive = computed(() => load.value && ['awarded', 'picked_up'].includes(load.value.status))
@@ -129,6 +139,7 @@ const mapPoints = computed(() => {
           <UBadge v-if="load.truckSeq" variant="soft" color="info" class="tabular-nums">Truck {{ load.truckSeq }}/{{ load.trucksTotal }}</UBadge>
           <UBadge v-if="load.source === 'manual'" variant="subtle" color="neutral">external</UBadge>
           <LoadStatusBadge :status="load.status" />
+          <UBadge v-if="load.invoicedAt" variant="subtle" color="success" icon="i-lucide-receipt">invoiced</UBadge>
         </div>
         <p class="text-sm text-muted mt-1">
           {{ data?.shipper?.name }}<span v-if="data?.shipper?.phone"> · {{ data.shipper.phone }}</span>
@@ -153,7 +164,7 @@ const mapPoints = computed(() => {
 
     <UCard>
       <LoadRouteSummary :load="load" />
-      <LoadMap class="mt-4" :points="mapPoints" />
+      <LoadMap class="mt-4" :points="mapPoints" :route="data?.route" />
     </UCard>
 
     <div class="grid gap-6 lg:grid-cols-5">
@@ -208,7 +219,32 @@ const mapPoints = computed(() => {
       </div>
 
       <div class="lg:col-span-2 space-y-6 self-start">
+        <UCard v-if="invoiceable">
+          <template #header>
+            <h2 class="font-semibold text-highlighted">Invoice</h2>
+          </template>
+          <div v-if="load.invoicedAt" class="space-y-3">
+            <p class="text-sm">
+              <UIcon name="i-lucide-check-circle-2" class="size-4 inline text-success" />
+              Invoiced {{ formatDateTime(load.invoicedAt) }}
+            </p>
+            <div class="flex gap-2">
+              <UButton size="sm" variant="outline" color="neutral" icon="i-lucide-receipt" :to="`/carrier/invoices/${load.id}`">View invoice</UButton>
+              <UButton size="sm" variant="ghost" color="neutral" :loading="acting" @click="unmarkInvoiced">Undo</UButton>
+            </div>
+          </div>
+          <div v-else class="space-y-3">
+            <p class="text-sm text-muted">
+              Generate the invoice, send it<template v-if="data?.invoiceEmail"> to <span class="font-medium text-highlighted">{{ data.invoiceEmail }}</span></template>, then mark it sent.
+            </p>
+            <div class="flex gap-2">
+              <UButton size="sm" icon="i-lucide-receipt" :to="`/carrier/invoices/${load.id}`">View invoice</UButton>
+              <UButton size="sm" variant="outline" color="success" icon="i-lucide-mail-check" :loading="acting" @click="markInvoiced">Mark invoiced</UButton>
+            </div>
+          </div>
+        </UCard>
         <LoadChargesCard :load="load" />
+        <TicketGallery :load-id="load.id" :attachments="data?.attachments ?? []" />
         <UCard>
           <template #header>
             <h2 class="font-semibold text-highlighted">History</h2>

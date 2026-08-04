@@ -125,11 +125,32 @@ export default defineEventHandler(async (event) => {
   // On-site contacts belong to the working relationship — never to board
   // browsers. Same for the invoicing address.
   const canSeeContacts = isOwner || isSuperadmin || isAssignedCarrier || isAssignedDriver
+
+  // Scale-ticket photos (metadata only — images stream from their own route).
+  const attachments = canSeeContacts
+    ? await db.select({
+        id: loadAttachments.id,
+        kind: loadAttachments.kind,
+        filename: loadAttachments.filename,
+        contentType: loadAttachments.contentType,
+        sizeBytes: loadAttachments.sizeBytes,
+        createdAt: loadAttachments.createdAt,
+      }).from(loadAttachments).where(eq(loadAttachments.loadId, id)).orderBy(asc(loadAttachments.createdAt))
+    : []
   const visibleLoad = canSeeContacts
     ? load
     : { ...load, pickupContactName: null, pickupContactPhone: null, deliveryContactName: null, deliveryContactPhone: null }
   const invoiceEmail = (isOwner || isSuperadmin || isAssignedCarrier)
     ? (shipper?.billingEmail ?? shipper?.email ?? null)
+    : null
+
+  // Real driving route (OSRM, cached) when both stops have coordinates —
+  // powers the map polyline and the drive-time line. Best-effort.
+  const route = load.pickupLat !== null && load.pickupLng !== null && load.deliveryLat !== null && load.deliveryLng !== null
+    ? shapeRoute(await getDrivingRoute(
+        { lat: load.pickupLat, lng: load.pickupLng },
+        { lat: load.deliveryLat, lng: load.deliveryLng },
+      ))
     : null
 
   // Manual loads: expose the free-text customer in place of a shipper account.
@@ -149,5 +170,7 @@ export default defineEventHandler(async (event) => {
     assignedCompany,
     assignedDriver,
     assignedVehicle,
+    attachments,
+    route,
   }
 })

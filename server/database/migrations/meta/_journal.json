@@ -57,6 +57,20 @@
       "when": 1785868386048,
       "tag": "0007_abandoned_doctor_spectrum",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1785871342553,
+      "tag": "0008_omniscient_speed",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1785873942732,
+      "tag": "0009_sharp_sprite",
+      "breakpoints": true
     }
   ]
 }

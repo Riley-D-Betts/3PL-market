@@ -70,6 +70,7 @@ const mapPoints = computed(() => {
           <UBadge variant="outline" color="neutral" class="tabular-nums">{{ formatLoadNumber(load.loadNumber) }}</UBadge>
           <UBadge v-if="load.truckSeq" variant="soft" color="info" class="tabular-nums">Truck {{ load.truckSeq }}/{{ load.trucksTotal }}</UBadge>
           <LoadStatusBadge :status="load.status" />
+          <UBadge v-if="load.invoicedAt" variant="subtle" color="success" icon="i-lucide-receipt">invoiced</UBadge>
         </div>
         <p class="text-sm text-muted mt-1">
           Asking {{ formatCents(load.askingPriceCents) }}
@@ -95,7 +96,7 @@ const mapPoints = computed(() => {
 
     <UCard>
       <LoadRouteSummary :load="load" />
-      <LoadMap class="mt-4" :points="mapPoints" />
+      <LoadMap class="mt-4" :points="mapPoints" :route="data?.route" />
       <div v-if="data?.assignedCompany" class="mt-4 pt-4 border-t border-default grid gap-2 sm:grid-cols-3 text-sm">
         <div>
           <p class="text-xs uppercase tracking-wide text-muted">Carrier</p>
@@ -178,6 +179,7 @@ const mapPoints = computed(() => {
 
       <div class="lg:col-span-2 space-y-6 self-start">
         <LoadChargesCard v-if="!['draft', 'posted', 'cancelled'].includes(load.status)" :load="load" />
+        <TicketGallery :load-id="load.id" :attachments="data?.attachments ?? []" />
         <UCard>
           <template #header>
             <h2 class="font-semibold text-highlighted">History</h2>

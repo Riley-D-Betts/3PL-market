@@ -4,6 +4,18 @@ useSeoMeta({ title: 'Drivers — 3PL Market' })
 
 const toast = useToast()
 const { data, refresh } = await useFetch('/api/fleet/drivers')
+const { data: shiftData } = await useFetch('/api/fleet/shifts', { server: false, lazy: true })
+
+function shiftMiles(s: { startOdometerMi: number, endOdometerMi: number | null }): string {
+  if (s.endOdometerMi == null) return '—'
+  return `${(s.endOdometerMi - s.startOdometerMi).toLocaleString('en-US')} mi`
+}
+function pretripStatus(s: { pretrip: unknown, pretripDefects: string | null }): { label: string, color: 'success' | 'warning' } {
+  const items = Object.values((s.pretrip ?? {}) as Record<string, boolean>)
+  return items.every(Boolean)
+    ? { label: 'pre-trip ok', color: 'success' }
+    : { label: 'defects noted', color: 'warning' }
+}
 
 const showForm = ref(false)
 const form = reactive({ name: '', email: '', phone: '', password: '', homeBaseCity: '', homeBaseState: '' })
@@ -152,5 +164,45 @@ async function editHomeBase(driver: { id: string, homeBaseCity: string | null, h
         </div>
       </UCard>
     </div>
+
+    <UCard v-if="shiftData?.shifts?.length">
+      <template #header>
+        <h2 class="font-semibold text-highlighted">Recent shifts</h2>
+        <p class="text-sm text-muted mt-1">Sign-on truck, pre-trip result, mileage and fuel per driver day.</p>
+      </template>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-muted border-b border-default">
+              <th class="py-2 pr-4 font-medium">Driver</th>
+              <th class="py-2 pr-4 font-medium">Truck</th>
+              <th class="py-2 pr-4 font-medium">Started</th>
+              <th class="py-2 pr-4 font-medium">Ended</th>
+              <th class="py-2 pr-4 font-medium text-right">Miles</th>
+              <th class="py-2 pr-4 font-medium text-right">Fuel (gal)</th>
+              <th class="py-2 font-medium">Pre-trip</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="s in shiftData.shifts" :key="s.id" class="border-b border-default last:border-0">
+              <td class="py-2 pr-4 font-medium text-highlighted">{{ s.driverName }}</td>
+              <td class="py-2 pr-4">{{ s.plate }}</td>
+              <td class="py-2 pr-4 text-muted">{{ formatDateTime(s.startedAt) }}</td>
+              <td class="py-2 pr-4 text-muted">
+                <UBadge v-if="!s.endedAt" color="info" variant="subtle" size="sm">on duty</UBadge>
+                <template v-else>{{ formatDateTime(s.endedAt) }}</template>
+              </td>
+              <td class="py-2 pr-4 text-right tabular-nums">{{ shiftMiles(s) }}</td>
+              <td class="py-2 pr-4 text-right tabular-nums">{{ s.fuelGallons ?? '—' }}</td>
+              <td class="py-2">
+                <UBadge :color="pretripStatus(s).color" variant="subtle" size="sm" :title="s.pretripDefects ?? undefined">
+                  {{ pretripStatus(s).label }}
+                </UBadge>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </UCard>
   </div>
 </template>

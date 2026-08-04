@@ -37,6 +37,16 @@ const formEl = ref<HTMLFormElement | null>(null)
 const pickupPin = usePinnedAddress(toRef(state, 'pickupAddress'))
 const deliveryPin = usePinnedAddress(toRef(state, 'deliveryAddress'))
 
+// Live drive-time estimate (OSRM) once both stops are filled in.
+const driveEstimate = useRouteEstimate({
+  pickupCity: toRef(state, 'pickupCity'),
+  pickupState: toRef(state, 'pickupState'),
+  deliveryCity: toRef(state, 'deliveryCity'),
+  deliveryState: toRef(state, 'deliveryState'),
+  pickupPin,
+  deliveryPin,
+})
+
 const materialItems = MATERIAL_TYPES.map(m => ({ label: MATERIAL_TYPE_LABELS[m], value: m }))
 
 async function submit(post: boolean) {
@@ -194,6 +204,11 @@ async function submit(post: boolean) {
           </UFormField>
           <UFormField label="Travel time allowance (minutes)" hint="Paid travel time built into the rate">
             <UInput v-model.number="state.travelTimeAllowanceMin" type="number" min="0" max="1440" class="w-full" />
+            <p v-if="driveEstimate" class="text-xs text-muted mt-1">
+              <UIcon name="i-lucide-route" class="size-3 inline" />
+              Estimated drive: {{ formatMinutes(driveEstimate.durationMin) }} · {{ formatMiles(driveEstimate.miles) }}
+              <UButton size="xs" variant="link" class="p-0" @click="state.travelTimeAllowanceMin = driveEstimate.durationMin">Use as allowance</UButton>
+            </p>
           </UFormField>
           <UFormField label="Asking price (USD)" required hint="Per truck — carriers can accept instantly or counter-bid">
             <UInput v-model.number="state.askingPrice" type="number" min="1" step="0.01" class="w-full" required>
