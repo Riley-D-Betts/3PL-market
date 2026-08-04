@@ -10,6 +10,15 @@ const phone = z.string().trim().max(50).optional()
 // restrict inputs to non-empty strings or Date before coercing.
 const dateInput = z.union([z.string().min(1), z.date()]).pipe(z.coerce.date())
 
+const contactName = z.string().trim().min(1).max(200)
+const contactPhone = z.string().trim().min(1).max(50)
+
+/** Detention terms a carrier proposes with its bid / instant accept. */
+const detentionTerms = {
+  detentionFreeMinutes: z.number().int().min(0).max(1440).default(120),
+  detentionRatePerHourCents: z.number().int().min(0).max(100_000).default(7500),
+}
+
 export const loginSchema = z.object({
   email,
   password: z.string().min(1).max(200),
@@ -20,6 +29,11 @@ export const registerShipperSchema = z.object({
   email,
   password,
   phone,
+  billingEmail: email.optional(),
+})
+
+export const shipperProfileSchema = z.object({
+  billingEmail: email.nullable(),
 })
 
 export const registerCarrierSchema = z.object({
@@ -47,6 +61,10 @@ export const loadInputSchema = z.object({
   pickupWindowStart: dateInput,
   pickupWindowEnd: dateInput,
   askingPriceCents: z.number().int().positive(),
+  pickupContactName: contactName.optional(),
+  pickupContactPhone: contactPhone.optional(),
+  deliveryContactName: contactName.optional(),
+  deliveryContactPhone: contactPhone.optional(),
   post: z.boolean().optional().default(false),
 }).refine(v => v.pickupWindowStart <= v.pickupWindowEnd, {
   message: 'Pickup window start must be before its end',
@@ -67,11 +85,26 @@ export const loadPatchSchema = z.object({
   pickupWindowStart: dateInput.optional(),
   pickupWindowEnd: dateInput.optional(),
   askingPriceCents: z.number().int().positive().optional(),
+  pickupContactName: contactName.nullable().optional(),
+  pickupContactPhone: contactPhone.nullable().optional(),
+  deliveryContactName: contactName.nullable().optional(),
+  deliveryContactPhone: contactPhone.nullable().optional(),
 })
 
 export const bidInputSchema = z.object({
   amountCents: z.number().int().positive(),
   note: z.string().trim().max(1000).optional(),
+  ...detentionTerms,
+})
+
+/** Instant accept — body may be entirely absent; defaults apply. */
+export const acceptSchema = z.object({
+  ...detentionTerms,
+})
+
+export const blockInputSchema = z.object({
+  companyId: z.uuid(),
+  reason: z.string().trim().max(500).optional(),
 })
 
 export const awardSchema = z.object({

@@ -25,12 +25,18 @@ function load(status: LoadStatus, opts: Partial<LoadLike> = {}): LoadLike {
     status,
     assignedCompanyId: null,
     assignedDriverId: null,
+    arrivedPickupAt: null,
+    arrivedDeliveryAt: null,
     ...opts,
   }
 }
 
-const assigned = (status: LoadStatus) =>
-  load(status, { assignedCompanyId: CARRIER_CO, assignedDriverId: DRIVER_ID })
+const assigned = (status: LoadStatus, opts: Partial<LoadLike> = {}) =>
+  load(status, { assignedCompanyId: CARRIER_CO, assignedDriverId: DRIVER_ID, ...opts })
+
+/** Assigned load with both arrival logs recorded — the fully-progressed shape. */
+const arrived = (status: LoadStatus) =>
+  assigned(status, { arrivedPickupAt: new Date(), arrivedDeliveryAt: new Date() })
 
 describe('actorKinds', () => {
   it('identifies the owning shipper', () => {
@@ -68,9 +74,9 @@ describe('legal transitions', () => {
     expect(canTransition(otherCarrierAdmin, load('posted'), 'awarded')).toBe(true)
   })
 
-  it('assigned driver picks up and delivers', () => {
-    expect(canTransition(assignedDriver, assigned('awarded'), 'picked_up')).toBe(true)
-    expect(canTransition(assignedDriver, assigned('picked_up'), 'delivered')).toBe(true)
+  it('assigned driver picks up and delivers after logging arrival', () => {
+    expect(canTransition(assignedDriver, assigned('awarded', { arrivedPickupAt: new Date() }), 'picked_up')).toBe(true)
+    expect(canTransition(assignedDriver, assigned('picked_up', { arrivedDeliveryAt: new Date() }), 'delivered')).toBe(true)
   })
 
   it('owner or assigned carrier admin cancels pre-pickup', () => {
@@ -87,16 +93,16 @@ describe('illegal transitions', () => {
   it('rejects skipping states', () => {
     expect(canTransition(owner, load('draft'), 'awarded')).toBe(false)
     expect(canTransition(owner, load('draft'), 'completed')).toBe(false)
-    expect(canTransition(assignedDriver, assigned('awarded'), 'delivered')).toBe(false)
-    expect(canTransition(owner, assigned('picked_up'), 'completed')).toBe(false)
+    expect(canTransition(assignedDriver, arrived('awarded'), 'delivered')).toBe(false)
+    expect(canTransition(owner, arrived('picked_up'), 'completed')).toBe(false)
   })
 
   it('rejects everything from terminal states', () => {
     for (const from of ['completed', 'cancelled'] as const) {
       for (const to of LOAD_STATUSES) {
-        expect(canTransition(owner, assigned(from), to)).toBe(false)
-        expect(canTransition(carrierAdmin, assigned(from), to)).toBe(false)
-        expect(canTransition(assignedDriver, assigned(from), to)).toBe(false)
+        expect(canTransition(owner, arrived(from), to)).toBe(false)
+        expect(canTransition(carrierAdmin, arrived(from), to)).toBe(false)
+        expect(canTransition(assignedDriver, arrived(from), to)).toBe(false)
       }
     }
   })
@@ -121,13 +127,13 @@ describe('actor restrictions', () => {
   })
 
   it('shipper cannot pick up or deliver', () => {
-    expect(canTransition(owner, assigned('awarded'), 'picked_up')).toBe(false)
-    expect(canTransition(owner, assigned('picked_up'), 'delivered')).toBe(false)
+    expect(canTransition(owner, arrived('awarded'), 'picked_up')).toBe(false)
+    expect(canTransition(owner, arrived('picked_up'), 'delivered')).toBe(false)
   })
 
   it('only the assigned driver may pick up / deliver', () => {
-    expect(canTransition(otherDriver, assigned('awarded'), 'picked_up')).toBe(false)
-    expect(canTransition(otherDriver, assigned('picked_up'), 'delivered')).toBe(false)
+    expect(canTransition(otherDriver, arrived('awarded'), 'picked_up')).toBe(false)
+    expect(canTransition(otherDriver, arrived('picked_up'), 'delivered')).toBe(false)
   })
 
   it('a non-assigned carrier admin cannot cancel an awarded load', () => {
@@ -135,8 +141,27 @@ describe('actor restrictions', () => {
   })
 
   it('pickup requires a driver assignment', () => {
-    const noDriver = load('awarded', { assignedCompanyId: CARRIER_CO })
+    const noDriver = load('awarded', { assignedCompanyId: CARRIER_CO, arrivedPickupAt: new Date() })
     expect(canTransition(assignedDriver, noDriver, 'picked_up')).toBe(false)
+  })
+})
+
+describe('arrival guards', () => {
+  it('pickup is refused until arrival at pickup is logged', () => {
+    expect(canTransition(assignedDriver, assigned('awarded'), 'picked_up')).toBe(false)
+    expect(canTransition(assignedDriver, assigned('awarded', { arrivedPickupAt: new Date() }), 'picked_up')).toBe(true)
+  })
+
+  it('delivery is refused until arrival at delivery is logged', () => {
+    const enRoute = assigned('picked_up', { arrivedPickupAt: new Date() })
+    expect(canTransition(assignedDriver, enRoute, 'delivered')).toBe(false)
+    expect(canTransition(assignedDriver, { ...enRoute, arrivedDeliveryAt: new Date() }, 'delivered')).toBe(true)
+  })
+
+  it('arrival logs grant no other transition powers', () => {
+    expect(canTransition(assignedDriver, arrived('awarded'), 'cancelled')).toBe(false)
+    expect(canTransition(otherDriver, arrived('awarded'), 'picked_up')).toBe(false)
+    expect(canTransition(owner, arrived('delivered'), 'completed')).toBe(true) // unchanged for the owner
   })
 })
 

@@ -4,7 +4,7 @@ useSeoMeta({ title: 'Register as a shipper — 3PL Market' })
 
 const { fetch: refreshSession } = useUserSession()
 
-const state = reactive({ name: '', email: '', phone: '', password: '' })
+const state = reactive({ name: '', email: '', phone: '', password: '', billingEmail: '' })
 const pending = ref(false)
 const error = ref<string | null>(null)
 
@@ -14,7 +14,11 @@ async function submit() {
   try {
     await $fetch('/api/auth/register-shipper', {
       method: 'POST',
-      body: { ...state, phone: state.phone || undefined },
+      body: {
+        ...state,
+        phone: state.phone || undefined,
+        billingEmail: state.billingEmail || undefined,
+      },
     })
     await refreshSession()
     await navigateTo('/shipper')
@@ -44,6 +48,9 @@ async function submit() {
         </UFormField>
         <UFormField label="Phone" name="phone">
           <UInput v-model="state.phone" type="tel" class="w-full" />
+        </UFormField>
+        <UFormField label="Invoicing email" name="billingEmail" hint="Where carriers send invoices — defaults to your account email">
+          <UInput v-model="state.billingEmail" type="email" class="w-full" />
         </UFormField>
         <UFormField label="Password" name="password" required hint="Min. 8 characters">
           <UInput v-model="state.password" type="password" autocomplete="new-password" minlength="8" class="w-full" required />

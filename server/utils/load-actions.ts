@@ -1,12 +1,18 @@
 import { createError } from 'h3'
-import { and, eq, ne, sql } from 'drizzle-orm'
+import { and, eq, ne, notExists, sql } from 'drizzle-orm'
 import { db } from '../database/client'
 import type { Tx } from '../database/client'
-import { bids, companies, loadEvents, loads } from '../database/schema'
+import { bids, companies, loadEvents, loads, shipperCarrierBlocks } from '../database/schema'
 import type { Bid, Company, Load } from '../database/schema'
 import type { LoadEventType, LoadStatus } from '../../shared/types'
 import type { ActorLike } from './load-state'
 import { STATUS_TIMESTAMP, TRANSITION_EVENT, TRANSITIONS, canTransition } from './load-state'
+import { isCarrierBlocked } from './blocks'
+
+export interface DetentionTerms {
+  detentionFreeMinutes: number
+  detentionRatePerHourCents: number
+}
 
 interface LoadEventInput {
   loadId: string
@@ -34,7 +40,15 @@ export interface TransitionOptions {
   to: LoadStatus
   /** Extra columns to set alongside the status change. */
   set?: Partial<typeof loads.$inferInsert>
+  /**
+   * Columns derived from the authoritative (row-locked) load — e.g. freezing
+   * detention fees from the arrival timestamps. Applied after `set`. May also
+   * return extra event payload under the `payload` key convention of callers.
+   */
+  deriveSet?: (load: Load, now: Date) => Partial<typeof loads.$inferInsert>
   payload?: unknown
+  /** Event payload derived from the row-locked load; wins over `payload`. */
+  payloadFrom?: (load: Load, now: Date) => unknown
   /** Reject all pending bids in the same transaction (unpost / cancel while posted). */
   rejectPendingBids?: boolean
 }
@@ -57,11 +71,23 @@ export async function performTransition(opts: TransitionOptions): Promise<Load> 
       if (!stateAllows) {
         throw createError({ statusCode: 409, statusMessage: `Load is ${load.status}; cannot move it to ${opts.to}` })
       }
+      // The state allows it — distinguish "missing prerequisite" from "wrong actor".
+      if (opts.to === 'picked_up' && load.assignedDriverId && !load.arrivedPickupAt) {
+        throw createError({ statusCode: 409, statusMessage: 'Record "Arrived at pickup" before marking the load picked up' })
+      }
+      if (opts.to === 'delivered' && !load.arrivedDeliveryAt) {
+        throw createError({ statusCode: 409, statusMessage: 'Record "Arrived at delivery" before marking the load delivered' })
+      }
       throw createError({ statusCode: 403, statusMessage: 'You are not allowed to perform this action on this load' })
     }
 
     const now = new Date()
-    const set: Partial<typeof loads.$inferInsert> = { status: opts.to, updatedAt: now, ...opts.set }
+    const set: Partial<typeof loads.$inferInsert> = {
+      status: opts.to,
+      updatedAt: now,
+      ...opts.set,
+      ...opts.deriveSet?.(load, now),
+    }
     const timestampColumn = STATUS_TIMESTAMP[opts.to]
     if (timestampColumn) {
       set[timestampColumn] = now
@@ -80,7 +106,46 @@ export async function performTransition(opts: TransitionOptions): Promise<Load> 
       eventType: TRANSITION_EVENT[`${load.status}->${opts.to}`] ?? 'note',
       fromStatus: load.status,
       toStatus: opts.to,
-      payload: opts.payload,
+      payload: opts.payloadFrom ? opts.payloadFrom(load, now) : opts.payload,
+    })
+    return updated!
+  })
+}
+
+/**
+ * Driver logs arrival at the pickup or delivery site. Not a status change —
+ * a timestamped fact that starts the detention clock and gates the
+ * picked_up / delivered transitions.
+ */
+export async function recordArrival(opts: { actor: ActorLike, loadId: string, phase: 'pickup' | 'delivery' }): Promise<Load> {
+  return db.transaction(async (tx) => {
+    const [load] = await tx.select().from(loads).where(eq(loads.id, opts.loadId)).for('update')
+    if (!load) {
+      throw createError({ statusCode: 404, statusMessage: 'Load not found' })
+    }
+    if (opts.actor.role !== 'driver' || load.assignedDriverId !== opts.actor.id) {
+      throw createError({ statusCode: 403, statusMessage: 'Only the assigned driver can record arrivals' })
+    }
+
+    const requiredStatus = opts.phase === 'pickup' ? 'awarded' : 'picked_up'
+    if (load.status !== requiredStatus) {
+      throw createError({ statusCode: 409, statusMessage: `Cannot record ${opts.phase} arrival while the load is ${load.status}` })
+    }
+    const column = opts.phase === 'pickup' ? 'arrivedPickupAt' : 'arrivedDeliveryAt'
+    if (load[column]) {
+      throw createError({ statusCode: 409, statusMessage: 'Arrival already recorded' })
+    }
+
+    const now = new Date()
+    const [updated] = await tx.update(loads)
+      .set({ [column]: now, updatedAt: now })
+      .where(eq(loads.id, load.id))
+      .returning()
+
+    await insertLoadEvent(tx, {
+      loadId: load.id,
+      actorUserId: opts.actor.id,
+      eventType: opts.phase === 'pickup' ? 'arrived_pickup' : 'arrived_delivery',
     })
     return updated!
   })
@@ -112,10 +177,13 @@ export async function awardBid(opts: { shipper: ActorLike, loadId: string, bidId
       throw createError({ statusCode: 409, statusMessage: 'Bid is no longer pending' })
     }
 
-    // The company may have been suspended since it bid.
+    // The company may have been suspended or blocked since it bid.
     const bidCompany = await tx.query.companies.findFirst({ where: eq(companies.id, bid.companyId) })
     if (bidCompany?.status !== 'approved') {
       throw createError({ statusCode: 409, statusMessage: 'This carrier is no longer approved on the platform' })
+    }
+    if (await isCarrierBlocked(tx, load.shipperId, bid.companyId)) {
+      throw createError({ statusCode: 409, statusMessage: 'You have blocked this carrier' })
     }
 
     const now = new Date()
@@ -130,6 +198,8 @@ export async function awardBid(opts: { shipper: ActorLike, loadId: string, bidId
         awardedBidId: bid.id,
         assignedCompanyId: bid.companyId,
         finalPriceCents: bid.amountCents,
+        detentionFreeMinutes: bid.detentionFreeMinutes,
+        detentionRatePerHourCents: bid.detentionRatePerHourCents,
         awardedAt: now,
         updatedAt: now,
       })
@@ -142,7 +212,13 @@ export async function awardBid(opts: { shipper: ActorLike, loadId: string, bidId
       eventType: 'awarded',
       fromStatus: 'posted',
       toStatus: 'awarded',
-      payload: { bidId: bid.id, companyId: bid.companyId, amountCents: bid.amountCents },
+      payload: {
+        bidId: bid.id,
+        companyId: bid.companyId,
+        amountCents: bid.amountCents,
+        detentionFreeMinutes: bid.detentionFreeMinutes,
+        detentionRatePerHourCents: bid.detentionRatePerHourCents,
+      },
     })
     return updated!
   })
@@ -155,7 +231,7 @@ export async function awardBid(opts: { shipper: ActorLike, loadId: string, bidId
  * `WHERE status = 'posted'`; Postgres row locking makes the loser wait, then
  * re-evaluate against the committed row, match zero rows and get a clean 409.
  */
-export async function instantAccept(opts: { user: ActorLike, company: Company, loadId: string }): Promise<Load> {
+export async function instantAccept(opts: { user: ActorLike, company: Company, loadId: string, terms: DetentionTerms }): Promise<Load> {
   return db.transaction(async (tx) => {
     const now = new Date()
     const [updated] = await tx.update(loads)
@@ -163,12 +239,31 @@ export async function instantAccept(opts: { user: ActorLike, company: Company, l
         status: 'awarded',
         assignedCompanyId: opts.company.id,
         finalPriceCents: sql`${loads.askingPriceCents}`,
+        detentionFreeMinutes: opts.terms.detentionFreeMinutes,
+        detentionRatePerHourCents: opts.terms.detentionRatePerHourCents,
         awardedAt: now,
         updatedAt: now,
       })
-      .where(and(eq(loads.id, opts.loadId), eq(loads.status, 'posted')))
+      .where(and(
+        eq(loads.id, opts.loadId),
+        eq(loads.status, 'posted'),
+        // Blocked carriers lose the race unconditionally.
+        notExists(
+          tx.select({ one: sql`1` }).from(shipperCarrierBlocks).where(and(
+            eq(shipperCarrierBlocks.shipperId, loads.shipperId),
+            eq(shipperCarrierBlocks.companyId, opts.company.id),
+          )),
+        ),
+      ))
       .returning()
     if (!updated) {
+      const load = await tx.query.loads.findFirst({ where: eq(loads.id, opts.loadId) })
+      if (!load) {
+        throw createError({ statusCode: 404, statusMessage: 'Load not found' })
+      }
+      if (load.status === 'posted' && await isCarrierBlocked(tx, load.shipperId, opts.company.id)) {
+        throw createError({ statusCode: 403, statusMessage: 'This shipper is not accepting loads from your company' })
+      }
       throw createError({ statusCode: 409, statusMessage: 'Load is no longer available' })
     }
 
@@ -184,6 +279,8 @@ export async function instantAccept(opts: { user: ActorLike, company: Company, l
         amountCents: updated.askingPriceCents,
         note: 'Instant accept at asking price',
         status: 'accepted',
+        detentionFreeMinutes: opts.terms.detentionFreeMinutes,
+        detentionRatePerHourCents: opts.terms.detentionRatePerHourCents,
       })
       .returning()
     await tx.update(loads).set({ awardedBidId: syntheticBid!.id }).where(eq(loads.id, updated.id))
@@ -194,7 +291,13 @@ export async function instantAccept(opts: { user: ActorLike, company: Company, l
       eventType: 'awarded',
       fromStatus: 'posted',
       toStatus: 'awarded',
-      payload: { instantAccept: true, companyId: opts.company.id, amountCents: updated.askingPriceCents },
+      payload: {
+        instantAccept: true,
+        companyId: opts.company.id,
+        amountCents: updated.askingPriceCents,
+        detentionFreeMinutes: opts.terms.detentionFreeMinutes,
+        detentionRatePerHourCents: opts.terms.detentionRatePerHourCents,
+      },
     })
     return { ...updated, awardedBidId: syntheticBid!.id }
   })
@@ -205,7 +308,7 @@ export async function instantAccept(opts: { user: ActorLike, company: Company, l
  * Locks the load row so a bid can never land after an award rejected the
  * pending bids but before that award committed.
  */
-export async function placeBid(opts: { user: ActorLike, company: Company, loadId: string, amountCents: number, note?: string }): Promise<Bid> {
+export async function placeBid(opts: { user: ActorLike, company: Company, loadId: string, amountCents: number, note?: string, terms: DetentionTerms }): Promise<Bid> {
   return db.transaction(async (tx) => {
     const [load] = await tx.select().from(loads).where(eq(loads.id, opts.loadId)).for('update')
     if (!load) {
@@ -213,6 +316,9 @@ export async function placeBid(opts: { user: ActorLike, company: Company, loadId
     }
     if (load.status !== 'posted') {
       throw createError({ statusCode: 409, statusMessage: 'Load is not open for bidding' })
+    }
+    if (await isCarrierBlocked(tx, load.shipperId, opts.company.id)) {
+      throw createError({ statusCode: 403, statusMessage: 'This shipper is not accepting bids from your company' })
     }
 
     const now = new Date()
@@ -224,11 +330,20 @@ export async function placeBid(opts: { user: ActorLike, company: Company, loadId
         amountCents: opts.amountCents,
         note: opts.note ?? null,
         status: 'pending',
+        detentionFreeMinutes: opts.terms.detentionFreeMinutes,
+        detentionRatePerHourCents: opts.terms.detentionRatePerHourCents,
       })
       .onConflictDoUpdate({
         target: [bids.loadId, bids.companyId],
         targetWhere: sql`${bids.status} = 'pending'`,
-        set: { amountCents: opts.amountCents, note: opts.note ?? null, createdBy: opts.user.id, updatedAt: now },
+        set: {
+          amountCents: opts.amountCents,
+          note: opts.note ?? null,
+          createdBy: opts.user.id,
+          detentionFreeMinutes: opts.terms.detentionFreeMinutes,
+          detentionRatePerHourCents: opts.terms.detentionRatePerHourCents,
+          updatedAt: now,
+        },
       })
       .returning()
 
@@ -236,7 +351,13 @@ export async function placeBid(opts: { user: ActorLike, company: Company, loadId
       loadId: load.id,
       actorUserId: opts.user.id,
       eventType: 'bid_placed',
-      payload: { bidId: bid!.id, companyId: opts.company.id, amountCents: opts.amountCents },
+      payload: {
+        bidId: bid!.id,
+        companyId: opts.company.id,
+        amountCents: opts.amountCents,
+        detentionFreeMinutes: opts.terms.detentionFreeMinutes,
+        detentionRatePerHourCents: opts.terms.detentionRatePerHourCents,
+      },
     })
     return bid!
   })

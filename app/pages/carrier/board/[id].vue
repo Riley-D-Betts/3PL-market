@@ -14,6 +14,20 @@ const bidAmount = ref<number | null>(null)
 const bidNote = ref('')
 const acting = ref(false)
 
+// Detention terms for the two paths (dollars in the UI, cents on the wire).
+const acceptFreeMinutes = ref(120)
+const acceptRatePerHour = ref(75)
+const bidFreeMinutes = ref(120)
+const bidRatePerHour = ref(75)
+
+// Re-bidding starts from the terms of the live bid.
+watch(myPendingBid, (bid) => {
+  if (bid) {
+    bidFreeMinutes.value = bid.detentionFreeMinutes
+    bidRatePerHour.value = bid.detentionRatePerHourCents / 100
+  }
+}, { immediate: true })
+
 async function act(fn: () => Promise<unknown>, success: string) {
   acting.value = true
   try {
@@ -31,7 +45,13 @@ async function act(fn: () => Promise<unknown>, success: string) {
 
 async function acceptNow() {
   await act(async () => {
-    await $fetch(`/api/loads/${route.params.id}/accept`, { method: 'POST' })
+    await $fetch(`/api/loads/${route.params.id}/accept`, {
+      method: 'POST',
+      body: {
+        detentionFreeMinutes: acceptFreeMinutes.value,
+        detentionRatePerHourCents: Math.round(acceptRatePerHour.value * 100),
+      },
+    })
     await navigateTo(`/carrier/loads/${route.params.id}`)
   }, 'Load is yours — assign a driver')
 }
@@ -40,7 +60,12 @@ const placeBid = () => act(async () => {
   if (!bidAmount.value) throw new Error('Enter a bid amount')
   await $fetch(`/api/loads/${route.params.id}/bids`, {
     method: 'POST',
-    body: { amountCents: Math.round(bidAmount.value * 100), note: bidNote.value || undefined },
+    body: {
+      amountCents: Math.round(bidAmount.value * 100),
+      note: bidNote.value || undefined,
+      detentionFreeMinutes: bidFreeMinutes.value,
+      detentionRatePerHourCents: Math.round(bidRatePerHour.value * 100),
+    },
   })
   bidAmount.value = null
   bidNote.value = ''
@@ -82,6 +107,9 @@ const withdraw = () => act(async () => {
           <p class="text-sm text-muted mt-1">
             Instantly win the load for {{ formatCents(load.askingPriceCents) }}. First carrier to accept gets it.
           </p>
+          <div class="mt-3">
+            <DetentionTermsInputs v-model:free-minutes="acceptFreeMinutes" v-model:rate-per-hour="acceptRatePerHour" />
+          </div>
           <UButton class="mt-3" color="success" icon="i-lucide-zap" :loading="acting" @click="acceptNow">
             Accept {{ formatCents(load.askingPriceCents) }}
           </UButton>
@@ -89,12 +117,15 @@ const withdraw = () => act(async () => {
         <div class="rounded-lg border border-default p-4">
           <p class="font-medium text-highlighted">{{ myPendingBid ? 'Update your bid' : 'Counter-bid' }}</p>
           <p v-if="myPendingBid" class="text-sm text-muted mt-1">
-            Current bid: {{ formatCents(myPendingBid.amountCents) }} — placing a new one replaces it.
+            Current bid: {{ formatCents(myPendingBid.amountCents) }}
+            ({{ formatMinutes(myPendingBid.detentionFreeMinutes) }} free · {{ formatCents(myPendingBid.detentionRatePerHourCents) }}/hr)
+            — placing a new one replaces it.
           </p>
           <div class="mt-3 space-y-3">
             <UInput v-model.number="bidAmount" type="number" min="1" step="0.01" placeholder="Your price (USD)" class="w-full">
               <template #leading>$</template>
             </UInput>
+            <DetentionTermsInputs v-model:free-minutes="bidFreeMinutes" v-model:rate-per-hour="bidRatePerHour" />
             <UTextarea v-model="bidNote" placeholder="Optional note to the shipper" :rows="2" class="w-full" />
             <div class="flex gap-2">
               <UButton icon="i-lucide-gavel" :loading="acting" @click="placeBid">

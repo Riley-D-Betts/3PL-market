@@ -67,6 +67,8 @@ export const users = pgTable(
     isActive: boolean('is_active').notNull().default(true),
     /** Bumped on password change — invalidates outstanding sealed-cookie sessions. */
     sessionVersion: integer('session_version').notNull().default(0),
+    /** Shippers: where carriers should send invoices. Falls back to email when null. */
+    billingEmail: text('billing_email'),
     ...timestamps,
   },
   table => [
@@ -118,6 +120,12 @@ export const loads = pgTable(
     deliveryLat: doublePrecision('delivery_lat'),
     deliveryLng: doublePrecision('delivery_lng'),
 
+    // On-site contacts — visible to the assigned carrier and driver only.
+    pickupContactName: text('pickup_contact_name'),
+    pickupContactPhone: text('pickup_contact_phone'),
+    deliveryContactName: text('delivery_contact_name'),
+    deliveryContactPhone: text('delivery_contact_phone'),
+
     materialType: materialTypeEnum('material_type').notNull(),
     materialDescription: text('material_description'),
     weightKg: integer('weight_kg').notNull(),
@@ -143,6 +151,15 @@ export const loads = pgTable(
     deliveredAt: timestamp('delivered_at', { withTimezone: true }),
     completedAt: timestamp('completed_at', { withTimezone: true }),
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+
+    // Detention: terms copied from the winning bid at award; arrival stamps
+    // recorded by the driver; fees frozen at the departure transitions.
+    detentionFreeMinutes: integer('detention_free_minutes'),
+    detentionRatePerHourCents: integer('detention_rate_per_hour_cents'),
+    arrivedPickupAt: timestamp('arrived_pickup_at', { withTimezone: true }),
+    arrivedDeliveryAt: timestamp('arrived_delivery_at', { withTimezone: true }),
+    pickupDetentionCents: integer('pickup_detention_cents'),
+    deliveryDetentionCents: integer('delivery_detention_cents'),
 
     ...timestamps,
   },
@@ -173,6 +190,9 @@ export const bids = pgTable(
     amountCents: integer('amount_cents').notNull(),
     note: text('note'),
     status: bidStatusEnum('status').notNull().default('pending'),
+    /** Detention terms proposed by the carrier with this bid; copied to the load on award. */
+    detentionFreeMinutes: integer('detention_free_minutes').notNull().default(120),
+    detentionRatePerHourCents: integer('detention_rate_per_hour_cents').notNull().default(7500),
     ...timestamps,
   },
   table => [
@@ -183,6 +203,8 @@ export const bids = pgTable(
     index('bids_load_idx').on(table.loadId),
     index('bids_company_idx').on(table.companyId),
     check('bids_amount_check', sql`${table.amountCents} > 0`),
+    check('bids_detention_free_check', sql`${table.detentionFreeMinutes} >= 0`),
+    check('bids_detention_rate_check', sql`${table.detentionRatePerHourCents} >= 0`),
   ],
 )
 
@@ -212,9 +234,30 @@ export const loadEvents = pgTable(
   table => [index('load_events_load_seq_idx').on(table.loadId, table.seq)],
 )
 
+/** Carriers a shipper refuses to work with — hidden board, no bids/accepts. */
+export const shipperCarrierBlocks = pgTable(
+  'shipper_carrier_blocks',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    shipperId: uuid('shipper_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    companyId: uuid('company_id')
+      .notNull()
+      .references(() => companies.id, { onDelete: 'cascade' }),
+    reason: text('reason'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  table => [
+    uniqueIndex('shipper_carrier_blocks_pair_unique').on(table.shipperId, table.companyId),
+    index('shipper_carrier_blocks_company_idx').on(table.companyId),
+  ],
+)
+
 export type Company = typeof companies.$inferSelect
 export type User = typeof users.$inferSelect
 export type Vehicle = typeof vehicles.$inferSelect
 export type Load = typeof loads.$inferSelect
 export type Bid = typeof bids.$inferSelect
 export type LoadEvent = typeof loadEvents.$inferSelect
+export type ShipperCarrierBlock = typeof shipperCarrierBlocks.$inferSelect

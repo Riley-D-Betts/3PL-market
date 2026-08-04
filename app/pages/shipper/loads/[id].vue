@@ -34,6 +34,15 @@ const award = (bidId: string) => act(
   'Load awarded',
 )
 
+async function blockCarrier(companyId: string, companyName: string) {
+  const reason = window.prompt(`Block ${companyName} from all your loads? Their pending bids will be rejected.\n\nOptional reason:`)
+  if (reason === null) return
+  await act(
+    () => $fetch('/api/shipper/blocks', { method: 'POST', body: { companyId, reason: reason || undefined } }),
+    `${companyName} blocked — manage in Settings`,
+  )
+}
+
 const pendingBids = computed(() => (data.value?.bids ?? []).filter(b => b.status === 'pending'))
 const decidedBids = computed(() => (data.value?.bids ?? []).filter(b => b.status !== 'pending'))
 </script>
@@ -110,19 +119,34 @@ const decidedBids = computed(() => (data.value?.bids ?? []).filter(b => b.status
               <div>
                 <p class="font-medium text-highlighted">{{ bid.companyName }}</p>
                 <p class="text-sm text-muted">{{ formatDateTime(bid.updatedAt) }}</p>
+                <p class="text-sm text-muted mt-1">
+                  <UIcon name="i-lucide-timer" class="size-3.5 inline" />
+                  Detention: {{ formatMinutes(bid.detentionFreeMinutes) }} free · {{ formatCents(bid.detentionRatePerHourCents) }}/hr
+                </p>
                 <p v-if="bid.note" class="text-sm mt-1">{{ bid.note }}</p>
               </div>
               <div class="text-right shrink-0">
                 <p class="font-semibold text-highlighted tabular-nums">{{ formatCents(bid.amountCents) }}</p>
-                <UButton
-                  v-if="load.status === 'posted'"
-                  size="sm"
-                  class="mt-2"
-                  :loading="acting"
-                  @click="award(bid.id)"
-                >
-                  Award
-                </UButton>
+                <div class="mt-2 flex flex-col items-end gap-1.5">
+                  <UButton
+                    v-if="load.status === 'posted'"
+                    size="sm"
+                    :loading="acting"
+                    @click="award(bid.id)"
+                  >
+                    Award
+                  </UButton>
+                  <UButton
+                    size="sm"
+                    variant="ghost"
+                    color="error"
+                    icon="i-lucide-shield-ban"
+                    :loading="acting"
+                    @click="blockCarrier(bid.companyId, bid.companyName)"
+                  >
+                    Block carrier
+                  </UButton>
+                </div>
               </div>
             </div>
           </div>
@@ -140,12 +164,15 @@ const decidedBids = computed(() => (data.value?.bids ?? []).filter(b => b.status
         </UCard>
       </div>
 
-      <UCard class="lg:col-span-2 self-start">
-        <template #header>
-          <h2 class="font-semibold text-highlighted">History</h2>
-        </template>
-        <EventTimeline :events="data?.events ?? []" />
-      </UCard>
+      <div class="lg:col-span-2 space-y-6 self-start">
+        <LoadChargesCard v-if="!['draft', 'posted', 'cancelled'].includes(load.status)" :load="load" />
+        <UCard>
+          <template #header>
+            <h2 class="font-semibold text-highlighted">History</h2>
+          </template>
+          <EventTimeline :events="data?.events ?? []" />
+        </UCard>
+      </div>
     </div>
   </div>
   <div v-else-if="pending" class="py-20 text-center text-muted">Loading…</div>

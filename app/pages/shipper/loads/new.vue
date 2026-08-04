@@ -19,6 +19,10 @@ const state = reactive({
   pickupWindowStart: '',
   pickupWindowEnd: '',
   askingPrice: null as number | null,
+  pickupContactName: '',
+  pickupContactPhone: '',
+  deliveryContactName: '',
+  deliveryContactPhone: '',
 })
 const pending = ref(false)
 const error = ref<string | null>(null)
@@ -49,6 +53,10 @@ async function submit(post: boolean) {
         pickupWindowStart: state.pickupWindowStart ? new Date(state.pickupWindowStart).toISOString() : undefined,
         pickupWindowEnd: state.pickupWindowEnd ? new Date(state.pickupWindowEnd).toISOString() : undefined,
         askingPriceCents: state.askingPrice != null ? Math.round(state.askingPrice * 100) : undefined,
+        pickupContactName: state.pickupContactName || undefined,
+        pickupContactPhone: state.pickupContactPhone || undefined,
+        deliveryContactName: state.deliveryContactName || undefined,
+        deliveryContactPhone: state.deliveryContactPhone || undefined,
         post,
       },
     })
@@ -89,6 +97,27 @@ async function submit(post: boolean) {
           </UFormField>
           <UFormField label="Delivery state" required>
             <UInput v-model="state.deliveryState" class="w-full" required />
+          </UFormField>
+        </div>
+      </UCard>
+
+      <UCard>
+        <template #header>
+          <h2 class="font-semibold text-highlighted">On-site contacts</h2>
+          <p class="text-sm text-muted mt-1">Who the driver should call at each stop. Shared with the carrier only after you award the load.</p>
+        </template>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <UFormField label="Pickup contact name">
+            <UInput v-model="state.pickupContactName" placeholder="Yard office — Manny" class="w-full" />
+          </UFormField>
+          <UFormField label="Pickup contact phone">
+            <UInput v-model="state.pickupContactPhone" type="tel" class="w-full" />
+          </UFormField>
+          <UFormField label="Delivery contact name">
+            <UInput v-model="state.deliveryContactName" placeholder="Site super — Kara" class="w-full" />
+          </UFormField>
+          <UFormField label="Delivery contact phone">
+            <UInput v-model="state.deliveryContactPhone" type="tel" class="w-full" />
           </UFormField>
         </div>
       </UCard>

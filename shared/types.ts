@@ -19,7 +19,7 @@ export type LoadStatus = (typeof LOAD_STATUSES)[number]
 export const BID_STATUSES = ['pending', 'accepted', 'rejected', 'withdrawn'] as const
 export type BidStatus = (typeof BID_STATUSES)[number]
 
-export const LOAD_EVENT_TYPES = ['created', 'posted', 'unposted', 'bid_placed', 'bid_withdrawn', 'awarded', 'driver_assigned', 'picked_up', 'delivered', 'completed', 'cancelled', 'note'] as const
+export const LOAD_EVENT_TYPES = ['created', 'posted', 'unposted', 'bid_placed', 'bid_withdrawn', 'awarded', 'driver_assigned', 'picked_up', 'delivered', 'completed', 'cancelled', 'note', 'arrived_pickup', 'arrived_delivery'] as const
 export type LoadEventType = (typeof LOAD_EVENT_TYPES)[number]
 
 /** Session user payload stored in the sealed cookie. Authoritative user state is re-read from DB per request. */

@@ -17,6 +17,8 @@ export default defineEventHandler(async (event) => {
     amountCents: bids.amountCents,
     note: bids.note,
     status: bids.status,
+    detentionFreeMinutes: bids.detentionFreeMinutes,
+    detentionRatePerHourCents: bids.detentionRatePerHourCents,
     createdAt: bids.createdAt,
     updatedAt: bids.updatedAt,
   })

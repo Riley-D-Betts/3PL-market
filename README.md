@@ -20,9 +20,11 @@ All demo passwords are `Password123!`.
 
 | Role | Email | What to try |
 |---|---|---|
-| Shipper | `shipper@demo.test` | Post a load, review bids, award, confirm delivery |
-| Carrier admin | `carrier@demo.test` | Browse the board, accept/bid, manage fleet & drivers, assign loads |
-| Driver | `driver1@demo.test` / `driver2@demo.test` | See assigned loads, mark picked up / delivered |
+| Shipper | `shipper@demo.test` | Post a load, review bids (with detention terms), award, block carriers, confirm delivery |
+| Carrier admin | `carrier@demo.test` | Browse the board, accept/bid with detention terms, manage fleet & drivers, assign loads |
+| Second carrier | `carrier2@demo.test` | Competing bids — compare terms side by side on the lumber load |
+| Blocked carrier | `blocked-carrier@demo.test` | Blocked by the demo shipper — their loads are invisible to it |
+| Driver | `driver1@demo.test` / `driver2@demo.test` | Arrive → load → depart flow; driver2 is mid-detention at a delivery |
 | Superadmin | `admin@3plmarket.test` | Approve "Pending Freight Co", manage users/companies |
 | Pending carrier | `pending-carrier@demo.test` | See the awaiting-approval experience |
 
@@ -62,17 +64,28 @@ Load state machine: `draft → posted → awarded → picked_up → delivered �
 ### Bidding rules
 
 - One **live bid per company per load** (enforced by a partial unique index); re-bidding replaces your bid.
+- Every bid (and instant accept) carries the carrier's **detention terms**: free wait time + hourly rate. The shipper compares terms alongside prices; awarding copies the agreed terms onto the load.
 - **Instant accept** is race-safe: a conditional `UPDATE … WHERE status = 'posted'` decides ties — the second of two simultaneous accepts gets a clean 409.
 - **Award** runs in one transaction (`SELECT … FOR UPDATE` on load and bid): winner accepted, all other pending bids rejected, load assigned to the winning company at the bid price.
 - Cancelling/unposting a load rejects its pending bids atomically.
+
+### Arrival logs & detention fees
+
+The driver's flow is **arrive → load → depart** at each stop: "Arrived at pickup" starts the wait clock (a `load_events` entry both parties see on the timeline), and marking the load picked up/delivered closes it. Waiting beyond the bid's free window accrues detention at the agreed hourly rate, prorated per minute; the fee is **frozen in the same transaction as the departure** and shown as line items (line haul + pickup/delivery detention = total due) to both shipper and carrier. Mid-wait, both dashboards show a live "accruing" estimate. Pickup/delivery cannot be marked without the matching arrival log.
+
+### Blacklist, contacts & invoicing
+
+- A shipper can **block a carrier company** (from any bid row, managed in Settings): blocked carriers don't see that shipper's loads on the board, can't bid or accept (server-enforced inside the same transactions that decide races), and their pending bids are rejected on block.
+- Loads carry optional **pickup/delivery contacts** (name + phone) — visible to the assigned carrier and driver only after award, never to board browsers.
+- Shippers set an **invoicing email** (Settings or registration); the winning carrier sees "send invoices to …" on the load (falls back to the account email). The platform does not send emails itself yet.
 
 ### Roles & authorization
 
 | Role | Can |
 |---|---|
-| `shipper` | CRUD own loads, post/unpost/cancel, award bids, confirm delivery |
-| `carrier_admin` | Browse board, accept/bid/withdraw, manage company fleet + driver accounts, assign drivers, pre-pickup backout |
-| `driver` | See own assigned loads, mark picked up / delivered |
+| `shipper` | CRUD own loads, post/unpost/cancel, award bids, block carriers, set invoicing email, confirm delivery |
+| `carrier_admin` | Browse board, accept/bid with detention terms, manage company fleet + driver accounts, assign drivers, pre-pickup backout |
+| `driver` | See own assigned loads, log arrivals, mark picked up / delivered |
 | `superadmin` | Approve/suspend carrier companies, activate/deactivate users, view everything |
 
 Carrier companies register as `pending` and must be approved by the superadmin before they can bid or accept (they can set up fleet and drivers while waiting). Sessions are sealed cookies (`nuxt-auth-utils`); the server re-reads the user row on every request, so deactivating a user or suspending a company takes effect immediately.
@@ -90,10 +103,11 @@ pnpm dev                        # migrates + seeds on boot
 ### Tests
 
 ```bash
-pnpm test              # unit tests (state machine) — no database needed
-pnpm test:integration  # bidding/award race tests — needs the compose postgres
+pnpm test              # unit tests (state machine, detention math) — no database needed
+pnpm test:integration  # bidding/award races, blacklist, detention freeze — needs the compose postgres
 pnpm test:all
 pnpm typecheck
+pnpm e2e               # full-journey smoke against a running instance (dev or compose)
 ```
 
 ### Database workflow

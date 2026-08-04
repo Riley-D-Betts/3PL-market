@@ -94,6 +94,10 @@ const backOut = () => act(
           {{ data?.shipper?.name }}<span v-if="data?.shipper?.phone"> · {{ data.shipper.phone }}</span>
           · {{ formatCents(load.finalPriceCents ?? load.askingPriceCents) }}
         </p>
+        <p v-if="data?.invoiceEmail" class="text-sm text-muted mt-0.5">
+          <UIcon name="i-lucide-receipt" class="size-3.5 inline" />
+          Send invoices to <span class="font-medium text-highlighted">{{ data.invoiceEmail }}</span>
+        </p>
       </div>
       <UButton
         v-if="load.status === 'awarded'"
@@ -162,12 +166,15 @@ const backOut = () => act(
         </UCard>
       </div>
 
-      <UCard class="lg:col-span-2 self-start">
-        <template #header>
-          <h2 class="font-semibold text-highlighted">History</h2>
-        </template>
-        <EventTimeline :events="data?.events ?? []" />
-      </UCard>
+      <div class="lg:col-span-2 space-y-6 self-start">
+        <LoadChargesCard :load="load" />
+        <UCard>
+          <template #header>
+            <h2 class="font-semibold text-highlighted">History</h2>
+          </template>
+          <EventTimeline :events="data?.events ?? []" />
+        </UCard>
+      </div>
     </div>
   </div>
 </template>

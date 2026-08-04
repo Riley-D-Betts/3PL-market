@@ -12,6 +12,11 @@ interface RouteLoad {
   materialDescription?: string | null
   weightKg: number
   quantity?: string | null
+  // Present only for viewers entitled to them (server nulls them otherwise).
+  pickupContactName?: string | null
+  pickupContactPhone?: string | null
+  deliveryContactName?: string | null
+  deliveryContactPhone?: string | null
 }
 
 defineProps<{ load: RouteLoad }>()
@@ -28,6 +33,10 @@ defineProps<{ load: RouteLoad }>()
         <p class="text-sm text-muted mt-1">
           {{ formatDateTime(load.pickupWindowStart) }} → {{ formatDateTime(load.pickupWindowEnd) }}
         </p>
+        <p v-if="load.pickupContactName" class="text-sm mt-1">
+          <UIcon name="i-lucide-phone" class="size-3.5 inline text-muted" />
+          {{ load.pickupContactName }}<span v-if="load.pickupContactPhone" class="text-muted"> · {{ load.pickupContactPhone }}</span>
+        </p>
       </div>
     </div>
     <div class="flex gap-3">
@@ -36,6 +45,10 @@ defineProps<{ load: RouteLoad }>()
         <p class="text-xs uppercase tracking-wide text-muted">Delivery</p>
         <p class="font-medium text-highlighted">{{ load.deliveryCity }}, {{ load.deliveryState }}</p>
         <p class="text-sm text-muted">{{ load.deliveryAddress }}</p>
+        <p v-if="load.deliveryContactName" class="text-sm mt-1">
+          <UIcon name="i-lucide-phone" class="size-3.5 inline text-muted" />
+          {{ load.deliveryContactName }}<span v-if="load.deliveryContactPhone" class="text-muted"> · {{ load.deliveryContactPhone }}</span>
+        </p>
       </div>
     </div>
     <div class="flex gap-3 sm:col-span-2">

@@ -15,6 +15,13 @@
       "when": 1785807029710,
       "tag": "0001_flashy_princess_powerful",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785814321218,
+      "tag": "0002_graceful_whiplash",
+      "breakpoints": true
     }
   ]
 }
