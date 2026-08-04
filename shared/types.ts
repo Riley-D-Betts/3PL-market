@@ -29,6 +29,8 @@ export interface SessionUser {
   name: string
   role: Role
   companyId: string | null
+  /** Must match users.session_version — bumped on password change to revoke old cookies. */
+  sessionVersion: number
 }
 
 // UI labels and formatters live in shared/utils/format.ts (auto-imported by Nuxt).

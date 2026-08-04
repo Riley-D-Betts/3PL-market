@@ -2,7 +2,9 @@ import { and, eq } from 'drizzle-orm'
 import { createError } from 'h3'
 
 export default defineEventHandler(async (event) => {
-  const { user, company } = await requireApprovedCarrier(event)
+  // Not approval-gated: a suspended carrier still dispatches its in-flight
+  // loads (the load is already theirs); only new marketplace activity is gated.
+  const { user, company } = await requireCarrierCompany(event)
   const id = getUuidParam(event)
   const body = await readValidatedBody(event, assignSchema.parse)
 

@@ -2,7 +2,7 @@ import { createError } from 'h3'
 import { and, eq, ne, sql } from 'drizzle-orm'
 import { db } from '../database/client'
 import type { Tx } from '../database/client'
-import { bids, loadEvents, loads } from '../database/schema'
+import { bids, companies, loadEvents, loads } from '../database/schema'
 import type { Bid, Company, Load } from '../database/schema'
 import type { LoadEventType, LoadStatus } from '../../shared/types'
 import type { ActorLike } from './load-state'
@@ -110,6 +110,12 @@ export async function awardBid(opts: { shipper: ActorLike, loadId: string, bidId
     }
     if (bid.status !== 'pending') {
       throw createError({ statusCode: 409, statusMessage: 'Bid is no longer pending' })
+    }
+
+    // The company may have been suspended since it bid.
+    const bidCompany = await tx.query.companies.findFirst({ where: eq(companies.id, bid.companyId) })
+    if (bidCompany?.status !== 'approved') {
+      throw createError({ statusCode: 409, statusMessage: 'This carrier is no longer approved on the platform' })
     }
 
     const now = new Date()
@@ -236,15 +242,27 @@ export async function placeBid(opts: { user: ActorLike, company: Company, loadId
   })
 }
 
-/** Withdraw a pending bid. Conditional update — races with award resolve to 409. */
+/**
+ * Withdraw a pending bid. Locks the load row BEFORE touching the bid — the
+ * same lock order as award/accept/placeBid — so withdraw-vs-award races
+ * serialize instead of deadlocking, and resolve to a clean 409.
+ */
 export async function withdrawBid(opts: { user: ActorLike, company: Company, bidId: string }): Promise<Bid> {
   return db.transaction(async (tx) => {
+    const [bid] = await tx.select().from(bids)
+      .where(and(eq(bids.id, opts.bidId), eq(bids.companyId, opts.company.id)))
+    if (!bid) {
+      throw createError({ statusCode: 404, statusMessage: 'Bid not found' })
+    }
+
+    await tx.select({ id: loads.id }).from(loads).where(eq(loads.id, bid.loadId)).for('update')
+
     const [updated] = await tx.update(bids)
       .set({ status: 'withdrawn', updatedAt: new Date() })
-      .where(and(eq(bids.id, opts.bidId), eq(bids.companyId, opts.company.id), eq(bids.status, 'pending')))
+      .where(and(eq(bids.id, bid.id), eq(bids.status, 'pending')))
       .returning()
     if (!updated) {
-      throw createError({ statusCode: 409, statusMessage: 'Bid can no longer be withdrawn' })
+      throw createError({ statusCode: 409, statusMessage: 'Bid is no longer pending' })
     }
     await insertLoadEvent(tx, {
       loadId: updated.loadId,

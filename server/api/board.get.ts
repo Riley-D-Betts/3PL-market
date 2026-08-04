@@ -1,5 +1,10 @@
 import { and, desc, eq, getTableColumns, ilike, lte, or, sql } from 'drizzle-orm'
 
+/** Escape LIKE wildcards so user input matches literally. */
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, m => `\\${m}`)
+}
+
 /** Open-load board for approved carriers. */
 export default defineEventHandler(async (event) => {
   const { company } = await requireApprovedCarrier(event)
@@ -18,12 +23,12 @@ export default defineEventHandler(async (event) => {
     .where(and(
       eq(loads.status, 'posted'),
       query.materialType ? eq(loads.materialType, query.materialType) : undefined,
-      query.pickupState ? ilike(loads.pickupState, query.pickupState) : undefined,
+      query.pickupState ? ilike(loads.pickupState, escapeLike(query.pickupState)) : undefined,
       query.maxWeightKg ? lte(loads.weightKg, query.maxWeightKg) : undefined,
       query.q
         ? or(
-            ilike(loads.pickupCity, `%${query.q}%`),
-            ilike(loads.deliveryCity, `%${query.q}%`),
+            ilike(loads.pickupCity, `%${escapeLike(query.q)}%`),
+            ilike(loads.deliveryCity, `%${escapeLike(query.q)}%`),
           )
         : undefined,
     ))

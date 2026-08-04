@@ -8,6 +8,13 @@
       "when": 1785803547552,
       "tag": "0000_spotty_menace",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1785807029710,
+      "tag": "0001_flashy_princess_powerful",
+      "breakpoints": true
     }
   ]
 }

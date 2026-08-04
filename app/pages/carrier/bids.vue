@@ -40,7 +40,10 @@ async function withdraw(bidId: string) {
       <UCard v-for="bid in data?.bids" :key="bid.id">
         <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
           <div class="flex-1 min-w-48">
+            <!-- Rejected/withdrawn bids stay unlinked: the load is no longer
+                 visible to this carrier and the detail pages would 403. -->
             <NuxtLink
+              v-if="bid.status === 'pending' || bid.status === 'accepted'"
               :to="bid.status === 'pending' ? `/carrier/board/${bid.loadId}` : `/carrier/loads/${bid.loadId}`"
               class="font-medium text-highlighted hover:text-primary"
             >
@@ -48,6 +51,11 @@ async function withdraw(bidId: string) {
               <UIcon name="i-lucide-arrow-right" class="size-4 inline text-muted" />
               {{ bid.deliveryCity }}, {{ bid.deliveryState }}
             </NuxtLink>
+            <p v-else class="font-medium text-highlighted">
+              {{ bid.pickupCity }}, {{ bid.pickupState }}
+              <UIcon name="i-lucide-arrow-right" class="size-4 inline text-muted" />
+              {{ bid.deliveryCity }}, {{ bid.deliveryState }}
+            </p>
             <p class="text-sm text-muted mt-0.5">
               {{ MATERIAL_TYPE_LABELS[bid.materialType] }} · {{ formatWeight(bid.weightKg) }}
               · asking {{ formatCents(bid.askingPriceCents) }} · {{ formatDateTime(bid.updatedAt) }}

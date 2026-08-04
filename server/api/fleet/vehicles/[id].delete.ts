@@ -1,10 +1,6 @@
 import { and, eq } from 'drizzle-orm'
 import { createError } from 'h3'
 
-function isForeignKeyViolation(err: unknown): boolean {
-  return typeof err === 'object' && err !== null && (err as { code?: string }).code === '23503'
-}
-
 export default defineEventHandler(async (event) => {
   const { company } = await requireCarrierCompany(event)
   const id = getUuidParam(event)

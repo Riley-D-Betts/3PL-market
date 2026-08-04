@@ -122,6 +122,11 @@ shared/                 # types + formatting utils shared by app & server
 tests/                  # vitest unit + integration suites
 ```
 
+## Known limitations
+
+- User deactivation is a single flag: a carrier admin can re-activate a driver that the platform superadmin deactivated. Distinguishing platform-level bans from company-level deactivation needs a separate field (planned alongside proper account moderation).
+- The demo compose file ships working demo credentials and a default session secret for one-command evaluation — the app logs a security warning on boot; change both before exposing an instance.
+
 ## Roadmap: vehicle GPS tracking
 
 The schema is ready for live tracking without migrations to existing tables:

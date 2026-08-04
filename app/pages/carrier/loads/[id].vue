@@ -13,25 +13,42 @@ const canAssign = computed(() => load.value && ['awarded', 'picked_up'].includes
 const { data: driverData } = await useFetch('/api/fleet/drivers', { server: false, lazy: true })
 const { data: vehicleData } = await useFetch('/api/fleet/vehicles', { server: false, lazy: true })
 
-const driverItems = computed(() =>
-  (driverData.value?.drivers ?? [])
-    .filter(d => d.isActive)
-    .map(d => ({ label: d.name, value: d.id })))
-const vehicleItems = computed(() => [
-  { label: 'No vehicle', value: undefined },
-  ...(vehicleData.value?.vehicles ?? [])
-    .filter(v => v.status === 'active')
-    .map(v => ({ label: `${VEHICLE_TYPE_LABELS[v.type]} · ${v.plate}`, value: v.id })),
-])
+// Selectable = active; the currently assigned driver/vehicle is kept in the
+// list even when inactive so the select renders a name, not a raw id.
+const driverItems = computed(() => {
+  const drivers = driverData.value?.drivers ?? []
+  const items = drivers.filter(d => d.isActive).map(d => ({ label: d.name, value: d.id }))
+  const assigned = drivers.find(d => d.id === load.value?.assignedDriverId)
+  if (assigned && !assigned.isActive) {
+    items.unshift({ label: `${assigned.name} (inactive)`, value: assigned.id })
+  }
+  return items
+})
+const vehicleItems = computed(() => {
+  const vehicles = vehicleData.value?.vehicles ?? []
+  const items: { label: string, value: string | undefined }[] = [
+    { label: 'No vehicle', value: undefined },
+    ...vehicles.filter(v => v.status === 'active')
+      .map(v => ({ label: `${VEHICLE_TYPE_LABELS[v.type]} · ${v.plate}`, value: v.id })),
+  ]
+  const assigned = vehicles.find(v => v.id === load.value?.assignedVehicleId)
+  if (assigned && assigned.status !== 'active') {
+    items.splice(1, 0, { label: `${VEHICLE_TYPE_LABELS[assigned.type]} · ${assigned.plate} (${assigned.status})`, value: assigned.id })
+  }
+  return items
+})
 
 const selectedDriver = ref<string | undefined>(undefined)
 const selectedVehicle = ref<string | undefined>(undefined)
 const acting = ref(false)
 
-watchEffect(() => {
-  if (load.value?.assignedDriverId && !selectedDriver.value) selectedDriver.value = load.value.assignedDriverId
-  if (load.value?.assignedVehicleId && !selectedVehicle.value) selectedVehicle.value = load.value.assignedVehicleId
-})
+// Initialize the selects from the load once — never fight later user edits
+// (a watchEffect here would revert clearing the vehicle back to undefined).
+watch(load, (l) => {
+  if (!l) return
+  selectedDriver.value = l.assignedDriverId ?? undefined
+  selectedVehicle.value = l.assignedVehicleId ?? undefined
+}, { once: true, immediate: true })
 
 async function act(fn: () => Promise<unknown>, success: string) {
   acting.value = true

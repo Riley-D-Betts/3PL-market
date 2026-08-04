@@ -3,8 +3,8 @@ import type { AnyPgColumn } from 'drizzle-orm/pg-core'
 import {
   bigserial,
   boolean,
-  check,
   char,
+  check,
   doublePrecision,
   index,
   integer,
@@ -65,6 +65,8 @@ export const users = pgTable(
     role: userRoleEnum('role').notNull(),
     companyId: uuid('company_id').references(() => companies.id),
     isActive: boolean('is_active').notNull().default(true),
+    /** Bumped on password change — invalidates outstanding sealed-cookie sessions. */
+    sessionVersion: integer('session_version').notNull().default(0),
     ...timestamps,
   },
   table => [

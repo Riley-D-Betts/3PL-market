@@ -1,9 +1,13 @@
 import { and, desc, eq, getTableColumns } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/pg-core'
 
-/** Loads won by the carrier admin's company (awarded through completed). */
+/**
+ * Loads won by the carrier admin's company (awarded through completed).
+ * Deliberately NOT approval-gated: a suspended carrier must keep visibility of
+ * its in-flight loads even though it can no longer take new work.
+ */
 export default defineEventHandler(async (event) => {
-  const { company } = await requireApprovedCarrier(event)
+  const { company } = await requireCarrierCompany(event)
   const query = await getValidatedQuery(event, loadsQuerySchema.parse)
 
   const driver = alias(users, 'driver')

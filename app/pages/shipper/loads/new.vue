@@ -22,10 +22,14 @@ const state = reactive({
 })
 const pending = ref(false)
 const error = ref<string | null>(null)
+const formEl = ref<HTMLFormElement | null>(null)
 
 const materialItems = MATERIAL_TYPES.map(m => ({ label: MATERIAL_TYPE_LABELS[m], value: m }))
 
 async function submit(post: boolean) {
+  // "Save as draft" comes from a type=button click, which skips native form
+  // validation — run it explicitly so drafts get the same field checks.
+  if (!post && formEl.value && !formEl.value.reportValidity()) return
   error.value = null
   pending.value = true
   try {
@@ -62,7 +66,7 @@ async function submit(post: boolean) {
 <template>
   <div class="max-w-2xl">
     <h1 class="text-xl font-bold text-highlighted mb-6">Post a load</h1>
-    <form class="space-y-6" @submit.prevent="submit(true)">
+    <form ref="formEl" class="space-y-6" @submit.prevent="submit(true)">
       <UCard>
         <template #header>
           <h2 class="font-semibold text-highlighted">Route</h2>

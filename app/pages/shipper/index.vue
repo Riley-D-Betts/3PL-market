@@ -6,7 +6,7 @@ definePageMeta({ layout: 'dashboard', auth: { roles: ['shipper'] } })
 useSeoMeta({ title: 'My loads — 3PL Market' })
 
 const statusFilter = ref<LoadStatus | undefined>(undefined)
-const { data, pending } = await useFetch('/api/loads', {
+const { data, pending, error } = await useFetch('/api/loads', {
   query: computed(() => ({ status: statusFilter.value || undefined })),
 })
 
@@ -26,7 +26,9 @@ const statusItems = [
       </div>
     </div>
 
-    <UCard v-if="!pending && !data?.loads?.length" class="text-center py-10">
+    <UAlert v-if="error" color="error" variant="subtle" title="Could not load your loads" :description="apiErrorMessage(error)" />
+
+    <UCard v-else-if="!pending && !data?.loads?.length" class="text-center py-10">
       <UIcon name="i-lucide-package-open" class="size-10 text-muted mx-auto" />
       <p class="mt-3 font-medium text-highlighted">No loads yet</p>
       <p class="text-sm text-muted">Post your first load to start getting bids from carriers.</p>

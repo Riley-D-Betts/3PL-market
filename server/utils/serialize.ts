@@ -32,5 +32,6 @@ export function toSessionUser(user: User): SessionUser {
     name: user.name,
     role: user.role,
     companyId: user.companyId,
+    sessionVersion: user.sessionVersion,
   }
 }

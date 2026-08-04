@@ -49,18 +49,24 @@ function startEdit(vehicle: { id: string, type: string, plate: string, capacityK
 async function submit() {
   acting.value = true
   try {
-    const body = {
+    const base = {
       type: form.type,
       plate: form.plate,
       capacityKg: form.capacityKg,
       status: form.status,
-      notes: form.notes || undefined,
     }
     if (editingId.value) {
-      await $fetch(`/api/fleet/vehicles/${editingId.value}`, { method: 'PATCH', body })
+      // PATCH: null clears notes; undefined would silently keep the old value.
+      await $fetch(`/api/fleet/vehicles/${editingId.value}`, {
+        method: 'PATCH',
+        body: { ...base, notes: form.notes || null },
+      })
     }
     else {
-      await $fetch('/api/fleet/vehicles', { method: 'POST', body })
+      await $fetch('/api/fleet/vehicles', {
+        method: 'POST',
+        body: { ...base, notes: form.notes || undefined },
+      })
     }
     showForm.value = false
     await refresh()

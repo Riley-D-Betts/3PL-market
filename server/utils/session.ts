@@ -35,6 +35,11 @@ export async function requireAuth(event: H3Event, roles?: Role[]): Promise<AuthC
     await clearUserSession(event)
     throw createError({ statusCode: 401, statusMessage: 'Account is not active' })
   }
+  // Cookies sealed before the last password change carry a stale version.
+  if ((session.user?.sessionVersion ?? 0) !== user.sessionVersion) {
+    await clearUserSession(event)
+    throw createError({ statusCode: 401, statusMessage: 'Session expired — please log in again' })
+  }
   if (roles && !roles.includes(user.role)) {
     throw createError({ statusCode: 403, statusMessage: 'Insufficient permissions' })
   }

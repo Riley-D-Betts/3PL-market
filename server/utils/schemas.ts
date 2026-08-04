@@ -6,6 +6,10 @@ const password = z.string().min(8).max(200)
 const name = z.string().trim().min(1).max(200)
 const phone = z.string().trim().max(50).optional()
 
+// Strict date input: z.coerce.date() alone turns null into 1970-01-01 —
+// restrict inputs to non-empty strings or Date before coercing.
+const dateInput = z.union([z.string().min(1), z.date()]).pipe(z.coerce.date())
+
 export const loginSchema = z.object({
   email,
   password: z.string().min(1).max(200),
@@ -40,8 +44,8 @@ export const loadInputSchema = z.object({
   materialDescription: z.string().trim().max(2000).optional(),
   weightKg: z.number().int().positive(),
   quantity: z.string().trim().max(200).optional(),
-  pickupWindowStart: z.coerce.date(),
-  pickupWindowEnd: z.coerce.date(),
+  pickupWindowStart: dateInput,
+  pickupWindowEnd: dateInput,
   askingPriceCents: z.number().int().positive(),
   post: z.boolean().optional().default(false),
 }).refine(v => v.pickupWindowStart <= v.pickupWindowEnd, {
@@ -60,8 +64,8 @@ export const loadPatchSchema = z.object({
   materialDescription: z.string().trim().max(2000).nullable().optional(),
   weightKg: z.number().int().positive().optional(),
   quantity: z.string().trim().max(200).nullable().optional(),
-  pickupWindowStart: z.coerce.date().optional(),
-  pickupWindowEnd: z.coerce.date().optional(),
+  pickupWindowStart: dateInput.optional(),
+  pickupWindowEnd: dateInput.optional(),
   askingPriceCents: z.number().int().positive().optional(),
 })
 

@@ -7,6 +7,7 @@ declare module '#auth-utils' {
     name: string
     role: Role
     companyId: string | null
+    sessionVersion: number
   }
 }
 
