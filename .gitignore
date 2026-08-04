@@ -1,0 +1,21 @@
+# Nuxt
+.nuxt
+.output
+.data
+dist
+
+# Node
+node_modules
+*.log
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Misc
+.DS_Store
+
+# Optional corporate-proxy CA used at docker build time (see Dockerfile)
+.build-ca.crt
+

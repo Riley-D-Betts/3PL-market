@@ -1,0 +1,39 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: threepl
+      POSTGRES_USER: threepl
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-threepl}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U threepl -d threepl"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgres://threepl:${POSTGRES_PASSWORD:-threepl}@postgres:5432/threepl
+      NUXT_SESSION_PASSWORD: ${NUXT_SESSION_PASSWORD:-insecure-dev-session-password-min-32-chars!}
+      NUXT_SEED_DEMO_DATA: ${NUXT_SEED_DEMO_DATA:-true}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+volumes:
+  pgdata:
