@@ -21,7 +21,8 @@ export interface ActorLike {
 }
 
 export interface LoadLike {
-  shipperId: string
+  /** Null for manual (off-platform) loads — the assigned carrier owns those. */
+  shipperId: string | null
   status: LoadStatus
   assignedCompanyId: string | null
   assignedDriverId: string | null
@@ -84,6 +85,11 @@ export function actorKinds(actor: ActorLike, load: LoadLike): ActorKind[] {
     kinds.push('carrier_admin')
     if (actor.companyId && actor.companyId === load.assignedCompanyId) {
       kinds.push('assigned_carrier_admin')
+      // Manual (off-platform) loads have no shipper account — the assigned
+      // carrier admin holds the owner powers (confirm completion, cancel).
+      if (load.shipperId === null) {
+        kinds.push('owner_shipper')
+      }
     }
   }
   if (actor.role === 'driver' && actor.id === load.assignedDriverId) {
@@ -95,6 +101,8 @@ export function actorKinds(actor: ActorLike, load: LoadLike): ActorKind[] {
 export function canTransition(actor: ActorLike, load: LoadLike, to: LoadStatus): boolean {
   const allowedActors = TRANSITIONS[load.status]?.[to]
   if (!allowedActors) return false
+  // Manual loads never enter the marketplace board.
+  if (to === 'posted' && load.shipperId === null) return false
   // Pickup requires an assigned driver who has logged arrival at the pickup
   // site; delivery requires logged arrival at the delivery site. The arrival
   // log doubles as the start of the detention clock.

@@ -111,6 +111,44 @@ export const demoLoginSchema = z.object({
   userId: z.uuid(),
 })
 
+export const reportsQuerySchema = z.object({
+  from: dateInput.optional(),
+  to: dateInput.optional(),
+})
+
+/** Off-platform load a carrier manages through the system. */
+export const manualLoadSchema = z.object({
+  pickupAddress: z.string().trim().min(1).max(500),
+  pickupCity: z.string().trim().min(1).max(100),
+  pickupState: z.string().trim().min(1).max(50),
+  deliveryAddress: z.string().trim().min(1).max(500),
+  deliveryCity: z.string().trim().min(1).max(100),
+  deliveryState: z.string().trim().min(1).max(50),
+  materialType: z.enum(MATERIAL_TYPES),
+  materialDescription: z.string().trim().max(2000).optional(),
+  weightKg: z.number().int().positive(),
+  quantity: z.string().trim().max(200).optional(),
+  pickupWindowStart: dateInput,
+  pickupWindowEnd: dateInput,
+  priceCents: z.number().int().positive(),
+  externalShipperName: z.string().trim().min(1).max(200),
+  externalShipperPhone: z.string().trim().max(50).optional(),
+  pickupContactName: contactName.optional(),
+  pickupContactPhone: contactPhone.optional(),
+  deliveryContactName: contactName.optional(),
+  deliveryContactPhone: contactPhone.optional(),
+  driverId: z.uuid().optional(),
+  vehicleId: z.uuid().optional(),
+}).refine(v => v.pickupWindowStart <= v.pickupWindowEnd, {
+  message: 'Pickup window start must be before its end',
+  path: ['pickupWindowEnd'],
+})
+
+export const nextLoadsQuerySchema = z.object({
+  fromLoadId: z.uuid(),
+  vehicleId: z.uuid().optional(),
+})
+
 export const awardSchema = z.object({
   bidId: z.uuid(),
 })
@@ -121,6 +159,10 @@ export const vehicleInputSchema = z.object({
   capacityKg: z.number().int().positive(),
   status: z.enum(VEHICLE_STATUSES).optional().default('active'),
   notes: z.string().trim().max(1000).optional(),
+  insurancePolicy: z.string().trim().max(100).optional(),
+  insuranceExpiresAt: dateInput.optional(),
+  nextServiceDueAt: dateInput.optional(),
+  odometerKm: z.number().int().min(0).optional(),
 })
 
 export const vehiclePatchSchema = z.object({
@@ -129,6 +171,17 @@ export const vehiclePatchSchema = z.object({
   capacityKg: z.number().int().positive().optional(),
   status: z.enum(VEHICLE_STATUSES).optional(),
   notes: z.string().trim().max(1000).nullable().optional(),
+  insurancePolicy: z.string().trim().max(100).nullable().optional(),
+  insuranceExpiresAt: dateInput.nullable().optional(),
+  nextServiceDueAt: dateInput.nullable().optional(),
+  odometerKm: z.number().int().min(0).nullable().optional(),
+})
+
+export const maintenanceLogSchema = z.object({
+  performedAt: dateInput,
+  description: z.string().trim().min(1).max(1000),
+  costCents: z.number().int().min(0).optional(),
+  odometerKm: z.number().int().min(0).optional(),
 })
 
 export const driverCreateSchema = z.object({

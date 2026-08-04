@@ -11,7 +11,8 @@ export default defineEventHandler(async (event) => {
     vehiclePlate: vehicles.plate,
   })
     .from(loads)
-    .innerJoin(users, eq(loads.shipperId, users.id))
+    // Left join: manual loads have no shipper account.
+    .leftJoin(users, eq(loads.shipperId, users.id))
     .leftJoin(vehicles, eq(loads.assignedVehicleId, vehicles.id))
     .where(and(
       eq(loads.assignedDriverId, user.id),

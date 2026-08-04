@@ -180,6 +180,65 @@ if (withDriver) {
   check('dispatch view exposes the assigned driver home base', typeof dispatch.assignedDriver?.homeBaseLat === 'number')
 }
 
+console.log('\n8b. fleet reports')
+{
+  const { data: report } = await granite('/api/carrier/reports', { expect: 200 })
+  check('report has totals and driver rows', typeof report.totals.totalLoads === 'number' && report.byDriver.length >= 1)
+  const dale2 = report.byDriver.find(r => r.driverName === 'Dale Rocker')
+  check('seeded delivered load contributes revenue incl. detention', (dale2?.revenueCents ?? 0) >= 36000 + 8750)
+  check('vehicle rows aggregate', report.byVehicle.length >= 1)
+}
+
+console.log('\n8c. load numbers')
+check('created loads carry a load number', typeof created.load.loadNumber === 'number' && created.load.loadNumber > 0)
+
+console.log('\n8d. manual (off-platform) load lifecycle')
+{
+  const manualDriverEmail = `e2e-ext-driver-${Date.now()}@demo.test`
+  const { data: extDriver } = await granite('/api/fleet/drivers', {
+    method: 'POST',
+    expect: 201,
+    body: { name: 'E2E Ext Driver', email: manualDriverEmail, password: PASSWORD },
+  })
+  const { data: manual } = await granite('/api/carrier/loads', {
+    method: 'POST',
+    expect: 201,
+    body: {
+      externalShipperName: 'E2E Offline Customer',
+      pickupAddress: 'X', pickupCity: 'Boise', pickupState: 'ID',
+      deliveryAddress: 'Y', deliveryCity: 'Meridian', deliveryState: 'ID',
+      materialType: 'sand', weightKg: 9000,
+      pickupWindowStart: new Date(Date.now() + 3600_000).toISOString(),
+      pickupWindowEnd: new Date(Date.now() + 7200_000).toISOString(),
+      priceCents: 40000,
+      driverId: extDriver.driver.id,
+    },
+  })
+  check('manual load starts awarded with source=manual', manual.load.status === 'awarded' && manual.load.source === 'manual')
+  check('manual load geocoded from cache', typeof manual.load.pickupLat === 'number')
+
+  const { data: c2board } = await carrier2('/api/board', { expect: 200 })
+  check('manual load never appears on the board', !c2board.loads.some(l => l.id === manual.load.id))
+
+  const extDriverClient = await login(manualDriverEmail)
+  await extDriverClient(`/api/driver/loads/${manual.load.id}/arrive-pickup`, { method: 'POST', expect: 200 })
+  await extDriverClient(`/api/driver/loads/${manual.load.id}/pickup`, { method: 'POST', expect: 200 })
+  await extDriverClient(`/api/driver/loads/${manual.load.id}/arrive-delivery`, { method: 'POST', expect: 200 })
+  await extDriverClient(`/api/driver/loads/${manual.load.id}/deliver`, { method: 'POST', expect: 200 })
+  const { data: confirmed } = await granite(`/api/loads/${manual.load.id}/confirm`, { method: 'POST', expect: 200 })
+  check('carrier admin confirms the manual load to completed', confirmed.load.status === 'completed')
+}
+
+console.log('\n8e. next-leg planner')
+{
+  const { data: won } = await granite('/api/carrier/loads', { expect: 200 })
+  const ref = won.loads.find(l => l.status === 'awarded' && l.source !== 'manual') ?? won.loads[0]
+  const { data: plan } = await granite(`/api/carrier/next-loads?fromLoadId=${ref.id}`, { expect: 200 })
+  check('planner returns suggestions with distances', plan.suggestions.length >= 1 && typeof plan.suggestions[0].distanceKm === 'number')
+  const dists = plan.suggestions.map(s => s.distanceKm ?? Number.POSITIVE_INFINITY)
+  check('suggestions sorted nearest first', dists.every((d, i) => i === 0 || d >= dists[i - 1]))
+}
+
 console.log('\n9. demo mode (skipped when the flag is off)')
 {
   const probe = client()

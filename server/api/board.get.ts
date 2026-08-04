@@ -1,4 +1,4 @@
-import { and, desc, eq, getTableColumns, ilike, lte, notExists, or, sql } from 'drizzle-orm'
+import { and, desc, eq, getTableColumns, ilike, lte, ne, notExists, or, sql } from 'drizzle-orm'
 
 /** Escape LIKE wildcards so user input matches literally. */
 function escapeLike(value: string): string {
@@ -36,6 +36,8 @@ export default defineEventHandler(async (event) => {
     .innerJoin(users, eq(loads.shipperId, users.id))
     .where(and(
       eq(loads.status, 'posted'),
+      // Manual loads can never reach 'posted', but keep the board explicit.
+      ne(loads.source, 'manual'),
       // Loads from shippers who blocked this company are invisible.
       notExists(
         db.select({ one: sql`1` }).from(shipperCarrierBlocks).where(and(

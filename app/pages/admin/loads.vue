@@ -28,12 +28,13 @@ const statusItems = [
         <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
           <div class="flex-1 min-w-48">
             <p class="font-medium text-highlighted">
+              <span class="text-muted font-normal tabular-nums mr-1">#{{ formatLoadNumber(load.loadNumber) }}</span>
               {{ load.pickupCity }}, {{ load.pickupState }}
               <UIcon name="i-lucide-arrow-right" class="size-4 inline text-muted" />
               {{ load.deliveryCity }}, {{ load.deliveryState }}
             </p>
             <p class="text-sm text-muted mt-0.5">
-              {{ load.shipperName }}<span v-if="load.carrierName"> → {{ load.carrierName }}</span>
+              {{ load.shipperName ?? load.externalShipperName }}<span v-if="load.carrierName"> → {{ load.carrierName }}</span>
               · {{ MATERIAL_TYPE_LABELS[load.materialType] }} · {{ formatWeight(load.weightKg) }}
               · {{ formatDate(load.createdAt) }}
             </p>

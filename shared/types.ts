@@ -22,6 +22,9 @@ export type BidStatus = (typeof BID_STATUSES)[number]
 export const LOAD_EVENT_TYPES = ['created', 'posted', 'unposted', 'bid_placed', 'bid_withdrawn', 'awarded', 'driver_assigned', 'picked_up', 'delivered', 'completed', 'cancelled', 'note', 'arrived_pickup', 'arrived_delivery'] as const
 export type LoadEventType = (typeof LOAD_EVENT_TYPES)[number]
 
+export const LOAD_SOURCES = ['marketplace', 'manual'] as const
+export type LoadSource = (typeof LOAD_SOURCES)[number]
+
 /** Session user payload stored in the sealed cookie. Authoritative user state is re-read from DB per request. */
 export interface SessionUser {
   id: string

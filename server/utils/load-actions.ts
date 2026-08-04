@@ -261,7 +261,7 @@ export async function instantAccept(opts: { user: ActorLike, company: Company, l
       if (!load) {
         throw createError({ statusCode: 404, statusMessage: 'Load not found' })
       }
-      if (load.status === 'posted' && await isCarrierBlocked(tx, load.shipperId, opts.company.id)) {
+      if (load.status === 'posted' && load.shipperId !== null && await isCarrierBlocked(tx, load.shipperId, opts.company.id)) {
         throw createError({ statusCode: 403, statusMessage: 'This shipper is not accepting loads from your company' })
       }
       throw createError({ statusCode: 409, statusMessage: 'Load is no longer available' })
@@ -317,7 +317,7 @@ export async function placeBid(opts: { user: ActorLike, company: Company, loadId
     if (load.status !== 'posted') {
       throw createError({ statusCode: 409, statusMessage: 'Load is not open for bidding' })
     }
-    if (await isCarrierBlocked(tx, load.shipperId, opts.company.id)) {
+    if (load.shipperId !== null && await isCarrierBlocked(tx, load.shipperId, opts.company.id)) {
       throw createError({ statusCode: 403, statusMessage: 'This shipper is not accepting bids from your company' })
     }
 

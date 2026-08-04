@@ -7,7 +7,10 @@ const { data, pending, error } = await useFetch('/api/carrier/loads')
 
 <template>
   <div>
-    <h1 class="text-xl font-bold text-highlighted mb-6">Won loads</h1>
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+      <h1 class="text-xl font-bold text-highlighted">Won loads</h1>
+      <UButton to="/carrier/loads/new" variant="outline" icon="i-lucide-plus">Add external load</UButton>
+    </div>
 
     <UAlert v-if="error" color="warning" variant="subtle" :description="apiErrorMessage(error)" />
 
@@ -24,12 +27,14 @@ const { data, pending, error } = await useFetch('/api/carrier/loads')
           <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
             <div class="flex-1 min-w-48">
               <p class="font-medium text-highlighted">
+                <span class="text-muted font-normal tabular-nums mr-1">#{{ formatLoadNumber(load.loadNumber) }}</span>
                 {{ load.pickupCity }}, {{ load.pickupState }}
                 <UIcon name="i-lucide-arrow-right" class="size-4 inline text-muted" />
                 {{ load.deliveryCity }}, {{ load.deliveryState }}
+                <UBadge v-if="load.source === 'manual'" variant="subtle" color="neutral" size="sm" class="ml-1">external</UBadge>
               </p>
               <p class="text-sm text-muted mt-0.5">
-                {{ load.shipperName }} · pickup {{ formatDateTime(load.pickupWindowStart) }}
+                {{ load.shipperName ?? load.externalShipperName }} · pickup {{ formatDateTime(load.pickupWindowStart) }}
               </p>
             </div>
             <p v-if="load.driverName" class="text-sm text-muted">

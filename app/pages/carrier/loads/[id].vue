@@ -81,6 +81,21 @@ const backOut = () => act(
   'Load cancelled',
 )
 
+// Next-leg planner: open loads near where this run ends, rated against the
+// selected vehicle. Advisory — refreshed when the vehicle selection changes.
+const plannerActive = computed(() => load.value && ['awarded', 'picked_up'].includes(load.value.status))
+const { data: nextLegs } = await useFetch('/api/carrier/next-loads', {
+  query: computed(() => ({
+    fromLoadId: route.params.id as string,
+    vehicleId: selectedVehicle.value ?? undefined,
+  })),
+  server: false,
+  lazy: true,
+  immediate: true,
+  ignoreResponseError: true,
+  watch: [selectedVehicle],
+})
+
 const mapPoints = computed(() => {
   const l = load.value
   if (!l) return []
@@ -110,6 +125,8 @@ const mapPoints = computed(() => {
       <div>
         <div class="flex items-center gap-3">
           <h1 class="text-xl font-bold text-highlighted">{{ load.pickupCity }} → {{ load.deliveryCity }}</h1>
+          <UBadge variant="outline" color="neutral" class="tabular-nums">{{ formatLoadNumber(load.loadNumber) }}</UBadge>
+          <UBadge v-if="load.source === 'manual'" variant="subtle" color="neutral">external</UBadge>
           <LoadStatusBadge :status="load.status" />
         </div>
         <p class="text-sm text-muted mt-1">
@@ -199,5 +216,47 @@ const mapPoints = computed(() => {
         </UCard>
       </div>
     </div>
+
+    <UCard v-if="plannerActive && nextLegs?.suggestions?.length">
+      <template #header>
+        <h2 class="font-semibold text-highlighted">Plan the next leg</h2>
+        <p class="text-sm text-muted mt-1">
+          Open loads near {{ nextLegs.from.city }}, {{ nextLegs.from.state }} — where this run ends<template v-if="nextLegs.vehicle">, rated for {{ nextLegs.vehicle.plate }} ({{ formatWeight(nextLegs.vehicle.capacityKg) }} capacity)</template>.
+        </p>
+      </template>
+      <div class="space-y-2">
+        <NuxtLink
+          v-for="candidate in nextLegs.suggestions"
+          :key="candidate.id"
+          :to="`/carrier/board/${candidate.id}`"
+          class="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-default p-3 hover:bg-elevated transition-colors"
+        >
+          <UBadge variant="soft" color="info" class="tabular-nums shrink-0 w-20 justify-center">
+            {{ formatKm(candidate.distanceKm) }}
+          </UBadge>
+          <div class="flex-1 min-w-48">
+            <p class="font-medium text-highlighted">
+              <span class="text-muted font-normal tabular-nums mr-1">#{{ formatLoadNumber(candidate.loadNumber) }}</span>
+              {{ candidate.pickupCity }}, {{ candidate.pickupState }}
+              <UIcon name="i-lucide-arrow-right" class="size-4 inline text-muted" />
+              {{ candidate.deliveryCity }}, {{ candidate.deliveryState }}
+            </p>
+            <p class="text-sm text-muted mt-0.5">
+              {{ MATERIAL_TYPE_LABELS[candidate.materialType] }} · {{ formatWeight(candidate.weightKg) }}
+              · pickup {{ formatDate(candidate.pickupWindowStart) }}
+            </p>
+          </div>
+          <span v-if="candidate.fitsCapacity !== null" class="flex gap-1.5">
+            <UBadge :color="candidate.fitsCapacity ? 'success' : 'error'" variant="subtle" size="sm">
+              {{ candidate.fitsCapacity ? 'fits capacity' : 'too heavy' }}
+            </UBadge>
+            <UBadge v-if="candidate.materialFit !== null" :color="candidate.materialFit ? 'success' : 'warning'" variant="subtle" size="sm">
+              {{ candidate.materialFit ? 'material fit' : 'check body type' }}
+            </UBadge>
+          </span>
+          <p class="font-semibold text-highlighted tabular-nums">{{ formatCents(candidate.askingPriceCents) }}</p>
+        </NuxtLink>
+      </div>
+    </UCard>
   </div>
 </template>

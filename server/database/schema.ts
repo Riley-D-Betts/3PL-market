@@ -20,6 +20,7 @@ import {
   BID_STATUSES,
   COMPANY_STATUSES,
   LOAD_EVENT_TYPES,
+  LOAD_SOURCES,
   LOAD_STATUSES,
   MATERIAL_TYPES,
   ROLES,
@@ -35,6 +36,7 @@ export const materialTypeEnum = pgEnum('material_type', MATERIAL_TYPES)
 export const loadStatusEnum = pgEnum('load_status', LOAD_STATUSES)
 export const bidStatusEnum = pgEnum('bid_status', BID_STATUSES)
 export const loadEventTypeEnum = pgEnum('load_event_type', LOAD_EVENT_TYPES)
+export const loadSourceEnum = pgEnum('load_source', LOAD_SOURCES)
 
 const timestamps = {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -98,6 +100,11 @@ export const vehicles = pgTable(
     capacityKg: integer('capacity_kg').notNull(),
     status: vehicleStatusEnum('status').notNull().default('active'),
     notes: text('notes'),
+    // Ops tracking — all optional.
+    insurancePolicy: text('insurance_policy'),
+    insuranceExpiresAt: timestamp('insurance_expires_at', { withTimezone: true }),
+    nextServiceDueAt: timestamp('next_service_due_at', { withTimezone: true }),
+    odometerKm: integer('odometer_km'),
     ...timestamps,
   },
   table => [
@@ -105,13 +112,35 @@ export const vehicles = pgTable(
   ],
 )
 
+/** Maintenance history per vehicle — services, repairs, inspections. */
+export const vehicleMaintenanceLogs = pgTable(
+  'vehicle_maintenance_logs',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    vehicleId: uuid('vehicle_id')
+      .notNull()
+      .references(() => vehicles.id, { onDelete: 'cascade' }),
+    performedAt: timestamp('performed_at', { withTimezone: true }).notNull(),
+    description: text('description').notNull(),
+    costCents: integer('cost_cents'),
+    odometerKm: integer('odometer_km'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  table => [index('vehicle_maintenance_vehicle_idx').on(table.vehicleId, table.performedAt)],
+)
+
 export const loads = pgTable(
   'loads',
   {
     id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
-    shipperId: uuid('shipper_id')
-      .notNull()
-      .references(() => users.id),
+    /** Short human-referenceable number, shown as L-<n> to both parties. */
+    loadNumber: bigserial('load_number', { mode: 'number' }).notNull(),
+    /** Marketplace loads have a shipper account; manual (off-platform) loads don't. */
+    source: loadSourceEnum('source').notNull().default('marketplace'),
+    shipperId: uuid('shipper_id').references(() => users.id),
+    /** Manual loads: who the freight is for, free text. */
+    externalShipperName: text('external_shipper_name'),
+    externalShipperPhone: text('external_shipper_phone'),
 
     pickupAddress: text('pickup_address').notNull(),
     pickupCity: text('pickup_city').notNull(),
@@ -169,6 +198,7 @@ export const loads = pgTable(
     ...timestamps,
   },
   table => [
+    uniqueIndex('loads_load_number_unique').on(table.loadNumber),
     index('loads_status_pickup_idx').on(table.status, table.pickupWindowStart),
     index('loads_shipper_idx').on(table.shipperId),
     index('loads_assigned_company_idx').on(table.assignedCompanyId),
@@ -176,6 +206,7 @@ export const loads = pgTable(
     check('loads_pickup_window_check', sql`${table.pickupWindowStart} <= ${table.pickupWindowEnd}`),
     check('loads_asking_price_check', sql`${table.askingPriceCents} > 0`),
     check('loads_weight_check', sql`${table.weightKg} > 0`),
+    check('loads_manual_shipper_check', sql`(${table.source} = 'manual') = (${table.shipperId} IS NULL)`),
   ],
 )
 
@@ -284,3 +315,4 @@ export type Load = typeof loads.$inferSelect
 export type Bid = typeof bids.$inferSelect
 export type LoadEvent = typeof loadEvents.$inferSelect
 export type ShipperCarrierBlock = typeof shipperCarrierBlocks.$inferSelect
+export type VehicleMaintenanceLog = typeof vehicleMaintenanceLogs.$inferSelect

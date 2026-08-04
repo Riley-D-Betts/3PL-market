@@ -67,6 +67,7 @@ const mapPoints = computed(() => {
           <h1 class="text-xl font-bold text-highlighted">
             {{ load.pickupCity }} → {{ load.deliveryCity }}
           </h1>
+          <UBadge variant="outline" color="neutral" class="tabular-nums">{{ formatLoadNumber(load.loadNumber) }}</UBadge>
           <LoadStatusBadge :status="load.status" />
         </div>
         <p class="text-sm text-muted mt-1">

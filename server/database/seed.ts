@@ -1,6 +1,6 @@
 import { eq, sql } from 'drizzle-orm'
 import type { Db } from './client'
-import { bids, companies, geocodeCache, loadEvents, loads, shipperCarrierBlocks, users, vehicles } from './schema'
+import { bids, companies, geocodeCache, loadEvents, loads, shipperCarrierBlocks, users, vehicleMaintenanceLogs, vehicles } from './schema'
 import { hashUserPassword } from '../utils/password'
 
 export const SUPERADMIN_EMAIL = 'admin@3plmarket.test'
@@ -99,6 +99,10 @@ export async function seed(db: Db): Promise<boolean> {
       type: 'flatbed',
       plate: 'ID-FLT-101',
       capacityKg: 22000,
+      insurancePolicy: 'GH-INS-77812',
+      insuranceExpiresAt: hours(200 * 24),
+      nextServiceDueAt: hours(20 * 24), // "20d left" warning badge
+      odometerKm: 145200,
     }).returning()
 
     const [dumpTruck] = await tx.insert(vehicles).values({
@@ -106,6 +110,10 @@ export async function seed(db: Db): Promise<boolean> {
       type: 'dump_truck',
       plate: 'ID-DMP-202',
       capacityKg: 18000,
+      insurancePolicy: 'GH-INS-77813',
+      insuranceExpiresAt: hours(18 * 24), // expiring-soon warning badge
+      nextServiceDueAt: hours(120 * 24),
+      odometerKm: 182400,
     }).returning()
 
     await tx.insert(vehicles).values({
@@ -115,6 +123,18 @@ export async function seed(db: Db): Promise<boolean> {
       capacityKg: 35000,
       status: 'maintenance',
       notes: 'Brake service until Friday',
+      insurancePolicy: 'GH-INS-77814',
+      insuranceExpiresAt: hours(300 * 24),
+      nextServiceDueAt: hours(-5 * 24), // overdue badge
+      odometerKm: 98100,
+    })
+
+    await tx.insert(vehicleMaintenanceLogs).values({
+      vehicleId: dumpTruck!.id,
+      performedAt: hours(-40 * 24),
+      description: 'Oil change + air filter',
+      costCents: 42000,
+      odometerKm: 178900,
     })
 
     const [pendingCo] = await tx.insert(companies).values({
@@ -411,6 +431,45 @@ export async function seed(db: Db): Promise<boolean> {
       { loadId: pickedUpLoad!.id, actorUserId: driver2!.id, eventType: 'picked_up', fromStatus: 'awarded', toStatus: 'picked_up', payload: { detentionMinutes: 0, detentionCents: 0 }, createdAt: hours(-3) },
       { loadId: pickedUpLoad!.id, actorUserId: driver2!.id, eventType: 'arrived_delivery', createdAt: hours(-1.2) },
     ])
+
+    // 5b. Manual (off-platform) load — freight Granite booked outside the
+    // marketplace, managed here: unassigned, so it lands in the day board's
+    // "Unassigned" lane.
+    const [manualLoad] = await tx.insert(loads).values({
+      source: 'manual',
+      shipperId: null,
+      externalShipperName: 'Palouse Sand & Stone',
+      externalShipperPhone: '+1 208 555 0400',
+      pickupAddress: 'Pit 4, 900 Quarry Rd',
+      pickupCity: 'Kuna',
+      pickupState: 'ID',
+      pickupLat: geo('kuna').lat,
+      pickupLng: geo('kuna').lng,
+      deliveryAddress: 'Batch yard, 55 Industrial Ave',
+      deliveryCity: 'Boise',
+      deliveryState: 'ID',
+      deliveryLat: geo('boise').lat,
+      deliveryLng: geo('boise').lng,
+      materialType: 'sand',
+      materialDescription: 'Fill sand, repeat weekly run',
+      weightKg: 15000,
+      quantity: '15 t',
+      pickupWindowStart: hours(5),
+      pickupWindowEnd: hours(9),
+      askingPriceCents: 52000,
+      finalPriceCents: 52000,
+      status: 'awarded',
+      assignedCompanyId: graniteId,
+      awardedAt: hours(-1),
+    }).returning()
+    await tx.insert(loadEvents).values({
+      loadId: manualLoad!.id,
+      actorUserId: carrierAdmin!.id,
+      eventType: 'created',
+      toStatus: 'awarded',
+      payload: { manual: true, externalShipperName: 'Palouse Sand & Stone' },
+      createdAt: hours(-1),
+    })
 
     // 6. Delivered load awaiting shipper confirmation
     const [deliveredLoad] = await tx.insert(loads).values({

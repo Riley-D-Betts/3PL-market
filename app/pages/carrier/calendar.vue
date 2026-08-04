@@ -5,22 +5,38 @@ definePageMeta({ layout: 'dashboard', auth: { roles: ['carrier_admin'] } })
 useSeoMeta({ title: 'Dispatch calendar — 3PL Market' })
 
 const { data, error } = await useFetch('/api/carrier/loads')
+const { data: driverData } = await useFetch('/api/fleet/drivers', { server: false, lazy: true })
 
-// ── Month grid (Sunday-start, 6 weeks) ──────────────────────────────────────
+// ── View + navigation state ─────────────────────────────────────────────────
+const view = ref<'month' | 'day'>('month')
 const today = new Date()
 const cursor = ref(new Date(today.getFullYear(), today.getMonth(), 1))
 const selectedDay = ref<Date>(new Date(today.getFullYear(), today.getMonth(), today.getDate()))
 
 const monthLabel = computed(() =>
   cursor.value.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }))
+const dayLabel = computed(() =>
+  selectedDay.value.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }))
 
 function shiftMonth(delta: number) {
   cursor.value = new Date(cursor.value.getFullYear(), cursor.value.getMonth() + delta, 1)
 }
 
+function shiftDay(delta: number) {
+  const d = new Date(selectedDay.value)
+  d.setDate(d.getDate() + delta)
+  selectedDay.value = d
+  cursor.value = new Date(d.getFullYear(), d.getMonth(), 1)
+}
+
 function goToday() {
   cursor.value = new Date(today.getFullYear(), today.getMonth(), 1)
   selectedDay.value = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+}
+
+function openDayBoard(day: Date) {
+  selectedDay.value = day
+  view.value = 'day'
 }
 
 const weeks = computed(() => {
@@ -75,16 +91,43 @@ const CHIP_COLORS: Record<LoadStatus, string> = {
 <template>
   <div class="space-y-6">
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <h1 class="text-xl font-bold text-highlighted">Dispatch calendar</h1>
+      <div class="flex items-center gap-3">
+        <h1 class="text-xl font-bold text-highlighted">Dispatch calendar</h1>
+        <div class="flex rounded-md border border-default overflow-hidden">
+          <button
+            type="button"
+            class="px-3 py-1 text-sm font-medium transition-colors"
+            :class="view === 'month' ? 'bg-primary text-inverted' : 'text-muted hover:text-highlighted'"
+            @click="view = 'month'"
+          >
+            Month
+          </button>
+          <button
+            type="button"
+            class="px-3 py-1 text-sm font-medium transition-colors"
+            :class="view === 'day' ? 'bg-primary text-inverted' : 'text-muted hover:text-highlighted'"
+            @click="view = 'day'"
+          >
+            Day
+          </button>
+        </div>
+      </div>
       <div class="flex items-center gap-2">
-        <UButton variant="ghost" color="neutral" icon="i-lucide-chevron-left" @click="shiftMonth(-1)" />
-        <span class="font-semibold text-highlighted w-36 text-center">{{ monthLabel }}</span>
-        <UButton variant="ghost" color="neutral" icon="i-lucide-chevron-right" @click="shiftMonth(1)" />
+        <UButton variant="ghost" color="neutral" icon="i-lucide-chevron-left" @click="view === 'month' ? shiftMonth(-1) : shiftDay(-1)" />
+        <span class="font-semibold text-highlighted w-44 text-center">{{ view === 'month' ? monthLabel : dayLabel }}</span>
+        <UButton variant="ghost" color="neutral" icon="i-lucide-chevron-right" @click="view === 'month' ? shiftMonth(1) : shiftDay(1)" />
         <UButton variant="outline" color="neutral" size="sm" @click="goToday">Today</UButton>
       </div>
     </div>
 
     <UAlert v-if="error" color="warning" variant="subtle" :description="apiErrorMessage(error)" />
+
+    <DayScheduleBoard
+      v-else-if="view === 'day'"
+      :day="selectedDay"
+      :loads="data?.loads ?? []"
+      :drivers="driverData?.drivers ?? []"
+    />
 
     <template v-else>
       <UCard :ui="{ body: 'p-0 sm:p-0' }">
@@ -129,9 +172,14 @@ const CHIP_COLORS: Record<LoadStatus, string> = {
 
       <UCard>
         <template #header>
-          <h2 class="font-semibold text-highlighted">
-            {{ selectedDay.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) }}
-          </h2>
+          <div class="flex items-center justify-between gap-3">
+            <h2 class="font-semibold text-highlighted">
+              {{ selectedDay.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) }}
+            </h2>
+            <UButton size="sm" variant="soft" icon="i-lucide-rows-3" @click="openDayBoard(selectedDay)">
+              Day board
+            </UButton>
+          </div>
         </template>
         <p v-if="!selectedLoads.length" class="text-sm text-muted py-2">
           Nothing scheduled — pickups land on the calendar when you win a load.

@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
     carrierName: carrier.name,
   })
     .from(loads)
-    .innerJoin(users, eq(loads.shipperId, users.id))
+    .leftJoin(users, eq(loads.shipperId, users.id))
     .leftJoin(carrier, eq(loads.assignedCompanyId, carrier.id))
     .where(query.status ? eq(loads.status, query.status) : undefined)
     .orderBy(desc(loads.createdAt))
